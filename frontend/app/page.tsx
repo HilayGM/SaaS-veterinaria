@@ -87,7 +87,7 @@ export default function Home() {
 
         <div className="section-title">
 
-          <h2>El Problema</h2>
+          <h2>Problemas en las Clínicas Veterinarias</h2>
 
           <div className="section-line"></div>
 
@@ -106,8 +106,7 @@ export default function Home() {
             <h3>Caos Administrativo</h3>
 
             <p>
-              El uso excesivo de papel provoca expedientes desorganizados,
-              pérdida de información y tiempo buscando historiales médicos.
+              Muchas clínicas veterinarias aún utilizan papel para registrar historiales y citas, lo que provoca pérdida de información y desorganización.
             </p>
 
           </div>
@@ -116,11 +115,10 @@ export default function Home() {
 
             <i className="fa-solid fa-pills"></i>
 
-            <h3>Inventario Ineficiente</h3>
+            <h3>Medicamentos Caducados</h3>
 
             <p>
-              Los medicamentos pueden caducar sin que el personal lo note,
-              generando pérdidas económicas importantes.
+              El control manual del inventario ocasiona pérdidas económicas debido a medicamentos vencidos o mal administrados.
             </p>
 
           </div>
@@ -129,11 +127,10 @@ export default function Home() {
 
             <i className="fa-regular fa-calendar-xmark"></i>
 
-            <h3>Falta de Seguimiento</h3>
+            <h3>Citas Perdidas</h3>
 
             <p>
-              Los clientes olvidan citas y vacunas causando ausencias
-              y espacios muertos en la agenda.
+              Los clientes suelen olvidar vacunas o consultas por falta de recordatorios automáticos.
             </p>
 
           </div>
