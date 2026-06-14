@@ -1,4 +1,13 @@
+'use client'
+
+import { useState, useCallback } from 'react'
+import DemoModal from './components/DemoModal'
+
 export default function Home() {
+  const [modalOpen, setModalOpen] = useState(false)
+  const openModal = useCallback(() => setModalOpen(true), [])
+  const closeModal = useCallback(() => setModalOpen(false), [])
+
   return (
     <main>
 
@@ -18,9 +27,9 @@ export default function Home() {
           <li><a href="#contacto">Contacto</a></li>
         </ul>
 
-        <a href="#" className="nav-btn">
+        <button type="button" className="nav-btn" onClick={openModal}>
           Solicitar Demo
-        </a>
+        </button>
 
       </nav>
 
@@ -37,17 +46,17 @@ export default function Home() {
           </h1>
 
           <p>
-            Automatiza citas, historiales médicos e inventario
-            para ahorrar tiempo, evitar pérdidas y brindar
-            una atención excepcional.
+            El sistema definitivo para que las veterinarias no pierdan dinero en
+            medicamentos caducados
+            .
           </p>
 
           <div className="hero-buttons">
 
-            <a href="#" className="btn btn-primary">
+            <button type="button" className="btn btn-primary" onClick={openModal}>
               <i className="fa-regular fa-calendar"></i>
               Solicitar Demo
-            </a>
+            </button>
 
             <a href="#solucion" className="btn btn-secondary">
               <i className="fa-solid fa-play"></i>
@@ -220,7 +229,7 @@ export default function Home() {
 
           <div className="card benefit">
 
-           <i className="fa-solid fa-sack-dollar"></i>
+            <i className="fa-solid fa-sack-dollar"></i>
 
             <h3>Protección de Ingresos</h3>
 
@@ -280,9 +289,9 @@ export default function Home() {
 
           </div>
 
-          <a href="#" className="cta-btn">
+          <button type="button" className="cta-btn" onClick={openModal}>
             Empezar Ahora
-          </a>
+          </button>
 
           <div className="cta-dog">
 
@@ -314,6 +323,9 @@ export default function Home() {
 
       </footer>
 
+      {/* DEMO MODAL */}
+      <DemoModal isOpen={modalOpen} onClose={closeModal} />
+
     </main>
-  );
+  )
 }
