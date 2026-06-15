@@ -1,0 +1,160 @@
+{
+  "info": {
+    "name": "QA Veterinaria - RLS MultiTenant",
+    "_postman_id": "a1b2c3d4-e5f6-7890-aaaa-bbbbccccdddd",
+    "description": "Pruebas de seguridad RLS para validar aislamiento por clínica",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "supabase_url",
+      "value": "https://klzlsyhvvlbwtrugnnyp.supabase.co"
+    },
+    {
+      "key": "anon_key",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtsemxzeWh2dmxid3RydWdubnlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NzE4MDUsImV4cCI6MjA5NzA0NzgwNX0.9kHuaLDrnUAuyPW37ng-W4V_fkbIGm1tARKprmLiKBo"
+    },
+    {
+      "key": "token_a",
+      "value": ""
+    },
+    {
+      "key": "token_b",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - Login Clínica A",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "if (jsonData.access_token) { pm.collectionVariables.set(\"token_a\", jsonData.access_token); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"clinicaA@test.com\",\n  \"password\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+          "host": [ "{{supabase_url}}" ],
+          "path": [ "auth", "v1", "token" ],
+          "query": [ { "key": "grant_type", "value": "password" } ]
+        }
+      }
+    },
+    {
+      "name": "2 - Login Clínica B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var jsonData = pm.response.json();",
+              "if (jsonData.access_token) { pm.collectionVariables.set(\"token_b\", jsonData.access_token); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"clinicaB@test.com\",\n  \"password\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+          "host": [ "{{supabase_url}}" ],
+          "path": [ "auth", "v1", "token" ],
+          "query": [ { "key": "grant_type", "value": "password" } ]
+        }
+      }
+    },
+    {
+      "name": "3 - GET Inventario (TEST RLS)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Estatus HTTP es 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Auditoría RLS: Datos vacíos o bloqueados para Clínica B\", function () {",
+              "    var responseData = pm.response.json();",
+              "    pm.expect(responseData.length).to.eql(0);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Authorization", "value": "Bearer {{token_b}}" }
+        ],
+        "url": {
+          "raw": "{{supabase_url}}/rest/v1/inventario",
+          "host": [ "{{supabase_url}}" ],
+          "path": [ "rest", "v1", "inventario" ]
+        }
+      }
+    },
+    {
+      "name": "4 - POST Inventario (TEST HACKEO RLS)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Auditoría RLS en POST: Supabase bloqueó la inserción ilegal\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]);",
+              "});",
+              "",
+              "pm.test(\"Mensaje contiene violación de política RLS o error\", function () {",
+              "    var responseBody = pm.response.text();",
+              "    pm.expect(responseBody).to.include(\"row-level security\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{anon_key}}" },
+          { "key": "Authorization", "value": "Bearer {{token_b}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre_articulo\": \"Vacunas Hackeadas\",\n  \"cantidad\": 50,\n  \"clinica_id\": \"REEMPLAZA_CON_EL_ID_DE_CLINICA_A\"\n}"
+        },
+        "url": {
+          "raw": "{{supabase_url}}/rest/v1/inventario",
+          "host": [ "{{supabase_url}}" ],
+          "path": [ "rest", "v1", "inventario" ]
+        }
+      }
+    }
+  ]
+}
