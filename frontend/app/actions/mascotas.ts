@@ -43,21 +43,41 @@ async function getAuthenticatedClient() {
 }
 
 export async function getMascotas(): Promise<MascotaConDueno[]> {
-  const supabase = await getAuthenticatedClient()
+  const perfil = await getCurrentUserProfile()
+  if (!perfil?.id_clinica) return []
 
-  const { data, error } = await supabase
+  const adminSupabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  // select('*') evita poner id_dueño (ñ) en el string de select que PostgREST parsea
+  const { data: mascotasRaw, error } = await adminSupabase
     .from('mascotas')
-    .select('id_mascota, nombre, especie, raza, fecha_nacimiento, id_clinica, clientes_duenos(nombre, telefono, correo)')
+    .select('*')
+    .eq('id_clinica', perfil.id_clinica)
     .order('id_mascota', { ascending: false })
 
   if (error) {
     console.error('[getMascotas]', error)
     return []
   }
+  if (!mascotasRaw?.length) return []
 
-  return (data ?? []).map(m => {
-    const rel = m.clientes_duenos as unknown
-    const dueno = Array.isArray(rel) ? (rel[0] ?? null) : (rel as MascotaConDueno['dueno'] | null)
+  // Query separada para clientes_duenos — PostgREST no puede seguir el FK
+  // con el caracter ñ en el nombre de columna, así que hacemos el join en código
+  const { data: duenosRaw } = await adminSupabase
+    .from('clientes_duenos')
+    .select('*')
+
+  const duenosPorId: Record<number, MascotaConDueno['dueno']> = {}
+  for (const d of duenosRaw ?? []) {
+    const id = d['id_dueño'] as number
+    duenosPorId[id] = { nombre: d.nombre, telefono: d.telefono, correo: d.correo }
+  }
+
+  return mascotasRaw.map(m => {
+    const idDueno = m['id_dueño'] as number | null
     return {
       id_mascota: m.id_mascota,
       nombre: m.nombre,
@@ -65,7 +85,7 @@ export async function getMascotas(): Promise<MascotaConDueno[]> {
       raza: m.raza,
       fecha_nacimiento: m.fecha_nacimiento,
       id_clinica: m.id_clinica,
-      dueno,
+      dueno: idDueno ? (duenosPorId[idDueno] ?? null) : null,
     }
   })
 }
