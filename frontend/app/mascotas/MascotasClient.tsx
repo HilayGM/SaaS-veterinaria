@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState, useTransition } from 'react'
+import { useActionState, useState, useTransition, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import DashboardShell from '@/app/components/DashboardShell'
 import {
   registrarMascotaAction,
@@ -22,14 +23,23 @@ function formatearFecha(fecha: string | null) {
 }
 
 export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
+  const router = useRouter()
   const [mascotas, setMascotas] = useState(mascotasIniciales)
   const [, startTransition] = useTransition()
   const [formKey, setFormKey] = useState(0)
 
+  // Sincroniza la lista cuando el servidor refetch tras revalidatePath
+  useEffect(() => {
+    setMascotas(mascotasIniciales)
+  }, [mascotasIniciales])
+
   const [state, formAction, pending] = useActionState<MascotaState, FormData>(
     async (prev, formData) => {
       const result = await registrarMascotaAction(prev, formData)
-      if (result?.success) setFormKey(k => k + 1)
+      if (result?.success) {
+        setFormKey(k => k + 1)
+        router.refresh() // fuerza al Server Component a re-ejecutar getMascotas()
+      }
       return result
     },
     null
