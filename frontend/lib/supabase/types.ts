@@ -1,6 +1,3 @@
-// Tipos manuales — cuando tengas el proyecto Supabase activo puedes reemplazar con:
-// npx supabase gen types typescript --project-id TU_PROJECT_ID > lib/supabase/types.ts
-
 export type Database = {
   public: {
     Tables: {
@@ -34,7 +31,42 @@ export type Database = {
         }
         Relationships: []
       }
+
+      mascotas: {
+        Row: {
+          id_mascota: number
+          nombre: string
+          especie: string
+          raza: string | null
+          fecha_nacimiento: string | null
+          id_dueño: number | null
+          id_clinica: number | null
+        }
+
+        Insert: {
+          id_mascota?: number
+          nombre: string
+          especie: string
+          raza?: string | null
+          fecha_nacimiento?: string | null
+          id_dueño?: number | null
+          id_clinica?: number | null
+        }
+
+        Update: {
+          id_mascota?: number
+          nombre?: string
+          especie?: string
+          raza?: string | null
+          fecha_nacimiento?: string | null
+          id_dueño?: number | null
+          id_clinica?: number | null
+        }
+
+        Relationships: []
+      }
     }
+
     Views: Record<string, never>
     Functions: Record<string, never>
     Enums: Record<string, never>
