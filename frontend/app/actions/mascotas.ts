@@ -21,7 +21,6 @@ export type MascotaConDueno = {
   fecha_nacimiento: string | null
   id_clinica: number | null
   dueno: {
-    id_dueño: number
     nombre: string
     telefono: string | null
     correo: string | null
@@ -48,7 +47,7 @@ export async function getMascotas(): Promise<MascotaConDueno[]> {
 
   const { data, error } = await supabase
     .from('mascotas')
-    .select('id_mascota, nombre, especie, raza, fecha_nacimiento, id_clinica, clientes_duenos(id_dueño, nombre, telefono, correo)')
+    .select('id_mascota, nombre, especie, raza, fecha_nacimiento, id_clinica, clientes_duenos(nombre, telefono, correo)')
     .order('id_mascota', { ascending: false })
 
   if (error) {
@@ -102,7 +101,7 @@ export async function registrarMascotaAction(
   const { data: dueno, error: duenoError } = await adminSupabase
     .from('clientes_duenos')
     .insert({ nombre: nombre_dueno })
-    .select('id_dueño')
+    .select('*')
     .single()
 
   if (duenoError || !dueno) {
@@ -118,7 +117,7 @@ export async function registrarMascotaAction(
       especie,
       raza,
       fecha_nacimiento,
-      id_dueño: dueno.id_dueño,
+      id_dueño: dueno['id_dueño'],
       id_clinica,
     })
 
