@@ -1,23 +1,11 @@
-'use client'
+import Link from 'next/link'
 
-import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import DemoModal from '@/app/components/DemoModal'
-
-export default function Home() {
-  const router = useRouter()
-  const [modalOpen, setModalOpen] = useState(false)
-  const openModal = useCallback(() => setModalOpen(true), [])
-  const closeModal = useCallback(() => setModalOpen(false), [])
-  const irAInventario = useCallback(() => router.push('/inventario'), [router])
-
+export default function LandingPage() {
   return (
     <main>
 
       {/* NAVBAR */}
-
       <nav>
-
         <div className="logo">
           <i className="fa-solid fa-heart-pulse"></i>
           PetCare <span>Intelligence</span>
@@ -30,18 +18,14 @@ export default function Home() {
           <li><a href="#contacto">Contacto</a></li>
         </ul>
 
-        <button type="button" className="nav-btn" onClick={irAInventario}>
-          Inventario
-        </button>
-
+        <Link href="/login" className="nav-btn">
+          Iniciar Sesión
+        </Link>
       </nav>
 
       {/* HERO */}
-
       <section className="hero">
-
         <div className="hero-content">
-
           <h1>
             La plataforma inteligente
             para veterinarias
@@ -50,33 +34,27 @@ export default function Home() {
 
           <p>
             El sistema definitivo para que las veterinarias no pierdan dinero en
-            medicamentos caducados
-            .
+            medicamentos caducados.
           </p>
 
           <div className="hero-buttons">
-
-            <button type="button" className="btn btn-primary" onClick={openModal}>
+            <Link href="/login" className="btn btn-primary">
               <i className="fa-regular fa-calendar"></i>
               Solicitar Demo
-            </button>
+            </Link>
 
             <a href="#solucion" className="btn btn-secondary">
               <i className="fa-solid fa-play"></i>
               Conocer Más
             </a>
-
           </div>
-
         </div>
 
         <div className="hero-image">
-
           <img
             src="https://thumbs.dreamstime.com/b/perro-veterinario-18384165.jpg"
             alt="Perro"
           />
-
         </div>
 
         <svg
@@ -90,244 +68,151 @@ export default function Home() {
             d="M0,256L80,250.7C160,245,320,235,480,224C640,213,800,203,960,208C1120,213,1280,235,1360,245.3L1440,256L1440,320L1360,320C1280,320,1120,320,960,320C800,320,640,320,480,320C320,320,160,320,80,320L0,320Z"
           ></path>
         </svg>
-
       </section>
 
       {/* PROBLEMA */}
-
       <section id="problema">
-
         <div className="section-title">
-
           <h2>Problemas en las Clínicas Veterinarias</h2>
-
           <div className="section-line"></div>
-
-          <p>
-            Las veterinarias pierden tiempo y dinero debido a procesos manuales.
-          </p>
-
+          <p>Las veterinarias pierden tiempo y dinero debido a procesos manuales.</p>
         </div>
 
         <div className="grid">
-
           <div className="card problem">
-
             <i className="fa-regular fa-file-lines"></i>
-
             <h3>Caos Administrativo</h3>
-
             <p>
               Muchas clínicas veterinarias aún utilizan papel para registrar historiales y citas, lo que provoca pérdida de información y desorganización.
             </p>
-
           </div>
 
           <div className="card problem">
-
             <i className="fa-solid fa-pills"></i>
-
             <h3>Medicamentos Caducados</h3>
-
             <p>
               El control manual del inventario ocasiona pérdidas económicas debido a medicamentos vencidos o mal administrados.
             </p>
-
           </div>
 
           <div className="card problem">
-
             <i className="fa-regular fa-calendar-xmark"></i>
-
             <h3>Citas Perdidas</h3>
-
             <p>
               Los clientes suelen olvidar vacunas o consultas por falta de recordatorios automáticos.
             </p>
-
           </div>
-
         </div>
-
       </section>
 
       {/* SOLUCION */}
-
       <section id="solucion">
-
         <div className="section-title">
-
           <h2>La Solución</h2>
-
           <div className="section-line"></div>
-
-          <p>
-            Una plataforma digital que automatiza las tareas más tediosas.
-          </p>
-
+          <p>Una plataforma digital que automatiza las tareas más tediosas.</p>
         </div>
 
         <div className="grid">
-
           <div className="card solution">
-
             <i className="fa-solid fa-mobile-screen-button"></i>
-
             <h3>Digitalización Centralizada</h3>
-
             <p>
               Consulta historiales médicos y organiza citas desde cualquier
               dispositivo sin depender de archivos físicos.
             </p>
-
           </div>
 
           <div className="card solution">
-
             <i className="fa-solid fa-box-open"></i>
-
             <h3>Inventario Inteligente</h3>
-
             <p>
               Alertas automáticas de caducidad y control preciso
               de medicamentos en tiempo real.
             </p>
-
           </div>
 
           <div className="card solution">
-
             <i className="fa-regular fa-comments"></i>
-
             <h3>Recordatorios Automáticos</h3>
-
             <p>
               Envía mensajes por WhatsApp para recordar citas y vacunas
               automáticamente.
             </p>
-
           </div>
-
         </div>
-
       </section>
 
       {/* BENEFICIOS */}
-
       <section id="beneficios">
-
         <div className="section-title">
-
           <h2>Beneficios</h2>
-
           <div className="section-line"></div>
-
-          <p>
-            Resultados reales para clínicas veterinarias.
-          </p>
-
+          <p>Resultados reales para clínicas veterinarias.</p>
         </div>
 
         <div className="grid">
-
           <div className="card benefit">
-
             <i className="fa-solid fa-sack-dollar"></i>
-
             <h3>Protección de Ingresos</h3>
-
             <p>
               Reduce pérdidas por medicamentos caducados
               y disminuye las inasistencias.
             </p>
-
           </div>
 
           <div className="card benefit">
-
             <i className="fa-regular fa-clock"></i>
-
             <h3>Ahorro de Tiempo</h3>
-
             <p>
               Elimina tareas repetitivas y dedica más tiempo
               a la atención de pacientes.
             </p>
-
           </div>
 
           <div className="card benefit">
-
             <i className="fa-solid fa-users"></i>
-
             <h3>Fidelización de Clientes</h3>
-
             <p>
               Brinda una experiencia moderna y mejora
               el seguimiento de las mascotas.
             </p>
-
           </div>
-
         </div>
-
       </section>
 
       {/* CTA */}
-
       <section className="cta">
-
         <div className="cta-box">
-
           <div className="cta-text">
-
-            <h2>
-              Transforma tu veterinaria hoy
-            </h2>
-
+            <h2>Transforma tu veterinaria hoy</h2>
             <p>
               Descubre cómo PetCare Intelligence puede ayudarte
               a automatizar y optimizar tu clínica.
             </p>
-
           </div>
 
-          <button type="button" className="cta-btn" onClick={openModal}>
+          <Link href="/login" className="cta-btn">
             Empezar Ahora
-          </button>
+          </Link>
 
-          <div className="cta-dog">
-
-
-          </div>
-
+          <div className="cta-dog"></div>
         </div>
-
       </section>
 
       {/* FOOTER */}
-
       <footer id="contacto">
-
         <div className="footer-logo">
-
           <i className="fa-solid fa-heart-pulse"></i>
           PetCare Intelligence
-
         </div>
 
         <div className="socials">
-
           <a href="#"><i className="fa-brands fa-whatsapp"></i></a>
           <a href="#"><i className="fa-brands fa-facebook-f"></i></a>
           <a href="#"><i className="fa-brands fa-instagram"></i></a>
-
         </div>
-
       </footer>
-
-      {/* DEMO MODAL */}
-      <DemoModal isOpen={modalOpen} onClose={closeModal} />
 
     </main>
   )

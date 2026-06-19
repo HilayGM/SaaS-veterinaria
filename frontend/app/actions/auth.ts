@@ -53,7 +53,7 @@ export async function loginAction(
     maxAge: 60 * 60 * 24 * 30,
   })
 
-  redirect('/landing')
+  redirect('/mascotas')
 }
 
 // ── REGISTRO ───────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ export async function registerAction(
     maxAge: 60 * 60 * 24 * 30,
   })
 
-  redirect('/landing')
+  redirect('/mascotas')
 }
 
 // ── LOGOUT ─────────────────────────────────────────────────────────────────
