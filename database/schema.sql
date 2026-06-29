@@ -1,30 +1,12 @@
---- este es el esquema completo de la base de datos
+-- =========================================================
+-- PetCare Intelligence — Esquema de Base de Datos (Supabase / PostgreSQL)
+-- Tech Lead: Tablas + Seguridad Multitenant (RLS)
+-- =========================================================
 
--- Habilitar RLS en las tablas
-ALTER TABLE public.inventario ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.mascotas ENABLE ROW LEVEL SECURITY;
+-- =========================================================
+-- 1. CREACIÓN DE TABLAS (De lo independiente a lo dependiente)
+-- =========================================================
 
--- POLÍTICAS PARA INVENTARIO
-CREATE POLICY "Permitir lectura de inventario por clínica"
-ON public.inventario FOR SELECT
-USING (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()));
-
-CREATE POLICY "Permitir modificaciones de inventario por clínica"
-ON public.inventario FOR ALL
-USING (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()))
-WITH CHECK (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()));
-
--- POLÍTICAS PARA MASCOTAS
-CREATE POLICY "Permitir lectura de mascotas por clínica"
-ON public.mascotas FOR SELECT
-USING (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()));
-
-CREATE POLICY "Permitir modificaciones de mascotas por clínica"
-ON public.mascotas FOR ALL
-USING (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()))
-WITH CHECK (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()));
-
--- 1. TABLA CLÍNICAS
 CREATE TABLE public.clinicas (
     id_clinica SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -32,7 +14,6 @@ CREATE TABLE public.clinicas (
     telefono VARCHAR(50)
 );
 
--- 2. TABLA USUARIOS (Vinculada a Supabase Auth)
 CREATE TABLE public.usuarios (
     id_usuario UUID PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -41,7 +22,6 @@ CREATE TABLE public.usuarios (
     id_clinica INT REFERENCES public.clinicas(id_clinica) ON DELETE SET NULL
 );
 
--- 3. TABLA CLIENTES_DUEÑOS
 CREATE TABLE public.clientes_duenos (
     id_dueño SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -49,7 +29,6 @@ CREATE TABLE public.clientes_duenos (
     correo VARCHAR(255)
 );
 
--- 4. TABLA MASCOTAS
 CREATE TABLE public.mascotas (
     id_mascota SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -57,10 +36,13 @@ CREATE TABLE public.mascotas (
     raza VARCHAR(100),
     fecha_nacimiento DATE,
     id_dueño INT REFERENCES public.clientes_duenos(id_dueño) ON DELETE CASCADE,
-    id_clinica INT REFERENCES public.clinicas(id_clinica) ON DELETE CASCADE
+    id_clinica INT REFERENCES public.clinicas(id_clinica) ON DELETE CASCADE,
+    medicamento TEXT,
+    dosis TEXT,
+    frecuencia TEXT,
+    duracion TEXT
 );
 
--- 5. TABLA INVENTARIO (Con restricción CHECK para evitar stock negativo)
 CREATE TABLE public.inventario (
     id_producto SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
@@ -69,7 +51,6 @@ CREATE TABLE public.inventario (
     id_clinica INT REFERENCES public.clinicas(id_clinica) ON DELETE CASCADE
 );
 
--- 6. TABLA EXPEDIENTES
 CREATE TABLE public.expedientes (
     id_expediente SERIAL PRIMARY KEY,
     id_mascota INT REFERENCES public.mascotas(id_mascota) ON DELETE CASCADE,
@@ -78,7 +59,6 @@ CREATE TABLE public.expedientes (
     fecha_consulta DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
--- 7. TABLA DETALLE_INSUMOS_EXPEDIENTE (Historial de uso de inventario)
 CREATE TABLE public.detalle_insumos_expediente (
     id_detalle SERIAL PRIMARY KEY,
     id_expediente INT REFERENCES public.expedientes(id_expediente) ON DELETE CASCADE,
@@ -87,7 +67,6 @@ CREATE TABLE public.detalle_insumos_expediente (
     fecha_movimiento TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- 8. TABLA CITAS
 CREATE TABLE public.citas (
     id_cita SERIAL PRIMARY KEY,
     id_mascota INT REFERENCES public.mascotas(id_mascota) ON DELETE CASCADE,
@@ -95,7 +74,6 @@ CREATE TABLE public.citas (
     estado VARCHAR(50) NOT NULL DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Completada', 'Cancelada'))
 );
 
--- 9. TABLA VACUNAS
 CREATE TABLE public.vacunas (
     id_vacuna SERIAL PRIMARY KEY,
     id_mascota INT REFERENCES public.mascotas(id_mascota) ON DELETE CASCADE,
@@ -105,25 +83,31 @@ CREATE TABLE public.vacunas (
 );
 
 -- =========================================================
--- CONFIGURACIÓN DE SEGURIDAD MULTITENANT (POLÍTICAS RLS)
+-- 2. ACTIVACIÓN EXPLÍCITA DE RLS (Buenas Prácticas)
+-- =========================================================
+ALTER TABLE public.inventario ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mascotas ENABLE ROW LEVEL SECURITY;
+
+-- =========================================================
+-- 3. POLÍTICAS DE SEGURIDAD (Se ejecutan al final)
 -- =========================================================
 
--- Como activaste RLS automático, las tablas ya lo tienen encendido. 
--- Ahora creamos las políticas de aislamiento por clínica.
-
+-- Usar una sola política FOR ALL con USING y WITH CHECK es más limpio y óptimo
 CREATE POLICY "Aislamiento Multitenant de Inventario"
 ON public.inventario
 FOR ALL
-USING (
-    id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid())
-);
+USING (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()))
+WITH CHECK (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()));
 
 CREATE POLICY "Aislamiento Multitenant de Mascotas"
 ON public.mascotas
 FOR ALL
-USING (
-    id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid())
-);
+USING (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()))
+WITH CHECK (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid()));
 
-
-
+-- =========================================================
+-- NOTA (pendiente, fuera del alcance del MVP de inventario):
+-- La landing page (app/actions/demo.ts) usa una tabla `solicitudes_demo`
+-- que aún no existe en este script. Si se quiere mantener el formulario
+-- de "solicitar demo" funcionando, falta crear esa tabla por separado.
+-- =========================================================
