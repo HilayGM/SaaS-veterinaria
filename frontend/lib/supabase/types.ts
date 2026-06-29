@@ -146,6 +146,10 @@ export type Database = {
           fecha_nacimiento: string | null
           id_dueño: number | null
           id_clinica: number | null
+          medicamento: string | null
+          dosis: string | null
+          frecuencia: string | null
+          duracion: string | null
         }
         Insert: {
           id_mascota?: number
@@ -155,6 +159,10 @@ export type Database = {
           fecha_nacimiento?: string | null
           id_dueño?: number | null
           id_clinica?: number | null
+          medicamento?: string | null
+          dosis?: string | null
+          frecuencia?: string | null
+          duracion?: string | null
         }
         Update: {
           id_mascota?: number
@@ -164,6 +172,10 @@ export type Database = {
           fecha_nacimiento?: string | null
           id_dueño?: number | null
           id_clinica?: number | null
+          medicamento?: string | null
+          dosis?: string | null
+          frecuencia?: string | null
+          duracion?: string | null
         }
         Relationships: [
           {

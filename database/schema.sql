@@ -36,7 +36,11 @@ CREATE TABLE public.mascotas (
     raza VARCHAR(100),
     fecha_nacimiento DATE,
     id_dueño INT REFERENCES public.clientes_duenos(id_dueño) ON DELETE CASCADE,
-    id_clinica INT REFERENCES public.clinicas(id_clinica) ON DELETE CASCADE
+    id_clinica INT REFERENCES public.clinicas(id_clinica) ON DELETE CASCADE,
+    medicamento TEXT,
+    dosis TEXT,
+    frecuencia TEXT,
+    duracion TEXT
 );
 
 CREATE TABLE public.inventario (

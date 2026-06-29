@@ -20,6 +20,10 @@ export type MascotaConDueno = {
   raza: string | null
   fecha_nacimiento: string | null
   id_clinica: number | null
+  medicamento: string | null
+  dosis: string | null
+  frecuencia: string | null
+  duracion: string | null
   dueno: {
     nombre: string
     telefono: string | null
@@ -85,6 +89,10 @@ export async function getMascotas(): Promise<MascotaConDueno[]> {
       raza: m.raza,
       fecha_nacimiento: m.fecha_nacimiento,
       id_clinica: m.id_clinica,
+      medicamento: m.medicamento,
+      dosis: m.dosis,
+      frecuencia: m.frecuencia,
+      duracion: m.duracion,
       dueno: idDueno ? (duenosPorId[idDueno] ?? null) : null,
     }
   })
@@ -100,6 +108,11 @@ export async function registrarMascotaAction(
   const fecha_nacimiento = (formData.get('fecha_nacimiento') as string) || null
   const nombre_dueno = (formData.get('nombre_dueno') as string)?.trim()
   const id_clinica_str = formData.get('id_clinica') as string
+  
+  const medicamento = (formData.get('medicamento') as string)?.trim() || null
+  const dosis = (formData.get('dosis') as string)?.trim() || null
+  const frecuencia = (formData.get('frecuencia') as string)?.trim() || null
+  const duracion = (formData.get('duracion') as string)?.trim() || null
 
   if (!nombre) return { error: 'El nombre de la mascota es obligatorio.' }
   if (!especie) return { error: 'La especie es obligatoria.' }
@@ -139,6 +152,10 @@ export async function registrarMascotaAction(
       fecha_nacimiento,
       id_dueño: dueno['id_dueño'],
       id_clinica,
+      medicamento,
+      dosis,
+      frecuencia,
+      duracion,
     })
 
   if (mascotaError) {
@@ -166,6 +183,33 @@ export async function eliminarMascotaAction(
   if (error) {
     console.error('[eliminar mascota]', error)
     return { error: 'No se pudo eliminar la mascota.' }
+  }
+
+  revalidatePath('/mascotas')
+  return { success: true }
+}
+
+export async function actualizarRecetaAction(
+  _prev: MascotaState,
+  formData: FormData
+): Promise<MascotaState> {
+  const id_mascota = parseInt(formData.get('id_mascota') as string)
+  if (isNaN(id_mascota)) return { error: 'Mascota inválida.' }
+
+  const medicamento = (formData.get('medicamento') as string)?.trim() || null
+  const dosis = (formData.get('dosis') as string)?.trim() || null
+  const frecuencia = (formData.get('frecuencia') as string)?.trim() || null
+  const duracion = (formData.get('duracion') as string)?.trim() || null
+
+  const supabase = await getAuthenticatedClient()
+  const { error } = await supabase
+    .from('mascotas')
+    .update({ medicamento, dosis, frecuencia, duracion })
+    .eq('id_mascota', id_mascota)
+
+  if (error) {
+    console.error('[actualizar receta]', error)
+    return { error: 'No se pudo actualizar la receta médica.' }
   }
 
   revalidatePath('/mascotas')
