@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { getFriendlyError } from "@/lib/supabase/errors";
 
 export default function RegisterPage() {
   const [nombre, setNombre] = useState("");
@@ -29,14 +30,13 @@ export default function RegisterPage() {
     });
 
     if (error) {
-       console.error("ERROR REGISTRO:", error);
-       alert(error.message);
-       return;      
+      alert(getFriendlyError(error, "No fue posible registrar el usuario."));
+      return;
     }
 
-    console.log("DATA REGISTRO:", data);
     alert("Usuario registrado correctamente");
-    
+    console.log(data);
+
     setNombre("");
     setEmail("");
     setPassword("");
