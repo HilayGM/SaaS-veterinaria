@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" checkout main)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" pull origin main)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" log origin/featured --oneline -3)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" checkout featured)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" merge main --no-edit)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" stash)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" diff --name-only --diff-filter=U)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" show origin/main:.github/CODEOWNERS)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" checkout --theirs .github/CODEOWNERS)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" add .github/CODEOWNERS)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" commit -m \"Merge main into featured — keep main CODEOWNERS\")",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" stash pop)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" add frontend/app/actions/mascotas.ts frontend/app/mascotas/MascotasClient.tsx frontend/lib/supabase/client.ts)",
+      "Bash(git -C 'd:\\\\repositorios\\\\SaaS-veterinaria' commit -m ' *)",
+      "Bash(git -C \"d:\\\\repositorios\\\\SaaS-veterinaria\" push origin featured)",
+      "Bash(gh pr create --base main --head featured --title 'fix: propietario en tabla mascotas + refresh lista tras registro' --body ' *)"
+    ]
+  }
+}
