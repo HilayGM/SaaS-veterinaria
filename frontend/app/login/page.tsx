@@ -1,32 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@/lib/supabase/client";
+import { useAuthSession } from "@/app/components/AuthSessionProvider";
+import { getFriendlyError } from "@/lib/supabase/errors";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  /*
-  useEffect(() => {
-    const verificarSesion = async () => {
-      const supabase = createBrowserClient();
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session) {
-        router.push("/mascotas");
-      }
-    };
-
-    verificarSesion();
-  }, [router]);
-  */
+  const { refresh } = useAuthSession();
 
   const iniciarSesion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,18 +22,29 @@ export default function LoginPage() {
     });
 
     if (error) {
-      alert(error.message);
-      console.error(error);
+      alert(getFriendlyError(error, "No fue posible iniciar sesión."));
       return;
     }
 
-    console.log("Usuario:", data.user);
-    console.log("Sesión:", data.session);
-    console.log("JWT:", data.session?.access_token);
+    try {
+      const currentSession = await refresh();
+      const accessToken = currentSession?.accessToken;
 
-    alert("Inicio de sesión correcto");
+      if (!accessToken) {
+        alert("No fue posible restaurar la sesión.");
+        return;
+      }
 
-    router.push("/mascotas");
+      alert("Inicio de sesión correcto");
+      console.log(data);
+    } catch (sessionError) {
+      alert(
+        getFriendlyError(
+          sessionError,
+          "No fue posible cargar la clínica de la sesión."
+        )
+      );
+    }
   };
 
   return (
