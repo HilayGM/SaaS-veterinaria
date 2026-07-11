@@ -29,11 +29,10 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
   const [, startTransition] = useTransition()
   const [formKey, setFormKey] = useState(0)
   const [mascotaEditandoReceta, setMascotaEditandoReceta] = useState<MascotaConDueno | null>(null)
-
-  // Sincroniza la lista cuando el servidor refetch tras revalidatePath
-  useEffect(() => {
-    setMascotas(mascotasIniciales)
-  }, [mascotasIniciales])
+  const [busquedaMascota, setBusquedaMascota] = useState('')
+  const mascotasFiltradas = mascotas.filter(m =>
+    m.nombre.toLowerCase().includes(busquedaMascota.toLowerCase())
+  )
 
   const [state, formAction, pending] = useActionState<MascotaState, FormData>(
     async (prev, formData) => {
@@ -150,6 +149,16 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                 </span>
               </h3>
 
+              <div className="mas-search">
+                <i className="fa-solid fa-magnifying-glass" />
+                <input
+                  type="text"
+                  value={busquedaMascota}
+                  onChange={e => setBusquedaMascota(e.target.value)}
+                  placeholder="Buscar mascota por nombre..."
+                />
+              </div>
+
               {mascotas.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8' }}>
                   <i className="fa-solid fa-paw" style={{ fontSize: '2rem', display: 'block', marginBottom: 10 }} />
@@ -157,32 +166,42 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                  <table className="mas-table">
-                    <thead>
-                      <tr>
-                        <th>Paciente</th>
-                        <th>Especie / Raza</th>
-                        <th>Nacimiento</th>
-                        <th>Propietario</th>
-                        <th>Receta</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mascotas.map(m => (
-                        <FilaMascota
-                          key={m.id_mascota}
-                          mascota={m}
-                          onEliminar={() =>
-                            startTransition(() =>
-                              setMascotas(prev => prev.filter(x => x.id_mascota !== m.id_mascota))
-                            )
-                          }
-                          onEditarReceta={() => setMascotaEditandoReceta(m)}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
+                  {mascotasFiltradas.length === 0 ? (
+                    <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8', background: '#fff' }}>
+                      <i className="fa-solid fa-magnifying-glass" style={{ fontSize: '1.8rem', display: 'block', marginBottom: 10 }} />
+                      <p style={{ fontSize: '.88rem', color: '#64748b', fontWeight: 600, marginBottom: 4 }}>
+                        No se encontraron mascotas con ese nombre.
+                      </p>
+                      <p style={{ fontSize: '.8rem' }}>Intenta escribir otro nombre.</p>
+                    </div>
+                  ) : (
+                    <table className="mas-table">
+                      <thead>
+                        <tr>
+                          <th>Paciente</th>
+                          <th>Especie / Raza</th>
+                          <th>Nacimiento</th>
+                          <th>Propietario</th>
+                          <th>Receta</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mascotasFiltradas.map(m => (
+                          <FilaMascota
+                            key={m.id_mascota}
+                            mascota={m}
+                            onEliminar={() =>
+                              startTransition(() =>
+                                setMascotas(prev => prev.filter(x => x.id_mascota !== m.id_mascota))
+                              )
+                            }
+                            onEditarReceta={() => setMascotaEditandoReceta(m)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
             </div>
@@ -276,6 +295,19 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
         }
         .mas-alert-error  { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
         .mas-alert-success { background: #f0fdf4; border: 1px solid #86efac; color: #16a34a; }
+        .mas-search {
+          display: flex; align-items: center; gap: 10px;
+          padding: 12px 14px; margin-bottom: 16px;
+          border: 1.5px solid #e2e8f0; border-radius: 10px;
+          background: #f8fafc; color: #94a3b8;
+        }
+        .mas-search:focus-within { border-color: #22d3ee; background: #fff; }
+        .mas-search input {
+          border: none; outline: none; background: transparent;
+          width: 100%; font-family: 'Poppins', sans-serif;
+          font-size: .88rem; color: #0f172a;
+        }
+        .mas-search input::placeholder { color: #94a3b8; }
         .mas-table { width: 100%; border-collapse: collapse; font-size: .85rem; font-family: 'Poppins', sans-serif; }
         .mas-table th {
           padding: 12px 16px; text-align: left; background: #f8fafc;
