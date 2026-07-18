@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import DashboardShell from '@/app/components/DashboardShell'
 import {
   registrarMascotaAction,
@@ -408,18 +409,21 @@ function FilaMascota({ mascota, onEliminar, onEditarReceta }: { mascota: Mascota
       <td style={{ color: '#64748b', fontSize: '.82rem' }}>{formatearFecha(mascota.fecha_nacimiento)}</td>
       <td style={{ fontSize: '.85rem' }}>{mascota.dueno?.nombre ?? '—'}</td>
       <td>
-        <button onClick={onEditarReceta} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}>
-          <i className="fa-solid fa-notes-medical" />
-          Receta
-        </button>
-      </td>
-      <td>
-        <form action={formActionEliminar} onSubmit={e => { if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) e.preventDefault() }}>
-          <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
-          <button type="submit" disabled={pendingEliminar} style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem', padding: 4 }}>
-            <i className="fa-solid fa-trash" />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onEditarReceta} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }} title="Editar Receta">
+            <i className="fa-solid fa-notes-medical" />
           </button>
-        </form>
+          <Link href={`/mascotas/detalle/${mascota.id_mascota}`} style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }} title="Ver Perfil (Expediente y Vacunas)">
+            <i className="fa-solid fa-address-card" />
+            Ver Perfil
+          </Link>
+          <form action={formActionEliminar} onSubmit={e => { if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) e.preventDefault() }}>
+            <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
+            <button type="submit" disabled={pendingEliminar} style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', borderRadius: 8, padding: '6px 12px', fontSize: '.9rem', display: 'flex', alignItems: 'center' }} title="Eliminar">
+              <i className="fa-solid fa-trash" />
+            </button>
+          </form>
+        </div>
       </td>
     </tr>
   )

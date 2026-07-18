@@ -1,11 +1,11 @@
-'use server'
+﻿'use server'
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
-// ── Tipos ──────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇ Tipos ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export type InventarioState = {
   error?: string
   success?: boolean
@@ -28,7 +28,7 @@ async function getAuthenticatedClient() {
   return supabase
 }
 
-// ── PERFIL DEL USUARIO ACTUAL (sesión + fila en `usuarios`) ────────────────
+// ÔöÇÔöÇ PERFIL DEL USUARIO ACTUAL (sesi├│n + fila en `usuarios`) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export type PerfilUsuario = {
   id_usuario: string
   nombre: string
@@ -73,7 +73,7 @@ export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
   }
 }
 
-// ── LISTAR INVENTARIO DE LA CLÍNICA DEL USUARIO ─────────────────────────────
+// ÔöÇÔöÇ LISTAR INVENTARIO DE LA CL├ìNICA DEL USUARIO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export type ProductoInventario = {
   id_producto: number
   nombre: string
@@ -84,9 +84,9 @@ export type ProductoInventario = {
 
 export async function getInventario(): Promise<ProductoInventario[]> {
   const supabase = await getAuthenticatedClient()
-  // No filtramos id_clinica explícitamente: RLS ya garantiza el aislamiento
-  // multitenant, así que esta consulta solo regresa los productos de la
-  // clínica del usuario autenticado (o vacío si no tiene clínica/sesión).
+  // No filtramos id_clinica expl├¡citamente: RLS ya garantiza el aislamiento
+  // multitenant, as├¡ que esta consulta solo regresa los productos de la
+  // cl├¡nica del usuario autenticado (o vac├¡o si no tiene cl├¡nica/sesi├│n).
   const { data, error } = await supabase
     .from('inventario')
     .select('id_producto, nombre, cantidad, fecha_caducidad, id_clinica')
@@ -99,7 +99,7 @@ export async function getInventario(): Promise<ProductoInventario[]> {
   return data ?? []
 }
 
-// ── AGREGAR PRODUCTO ──────────────────────────────────────────────────────
+// ÔöÇÔöÇ AGREGAR PRODUCTO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export async function agregarProductoAction(
   _prev: InventarioState,
   formData: FormData
@@ -113,11 +113,11 @@ export async function agregarProductoAction(
 
   const cantidad = parseInt(cantidad_str)
   if (isNaN(cantidad) || cantidad < 0) {
-    return { error: 'La cantidad debe ser un número positivo.' }
+    return { error: 'La cantidad debe ser un n├║mero positivo.' }
   }
 
   const id_clinica = id_clinica_str ? parseInt(id_clinica_str) : null
-  if (!id_clinica) return { error: 'No se detectó la clínica del usuario.' }
+  if (!id_clinica) return { error: 'No se detect├│ la cl├¡nica del usuario.' }
 
   const supabase = await getAuthenticatedClient()
   const { error } = await supabase.from('inventario').insert({
@@ -136,7 +136,7 @@ export async function agregarProductoAction(
   return { success: true }
 }
 
-// ── AJUSTAR STOCK (sumar o restar) ────────────────────────────────────────
+// ÔöÇÔöÇ AJUSTAR STOCK (sumar o restar) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export async function ajustarStockAction(
   _prev: InventarioState,
   formData: FormData
@@ -146,7 +146,7 @@ export async function ajustarStockAction(
   const cantidad_actual = parseInt(formData.get('cantidad_actual') as string)
 
   if (isNaN(id_producto) || isNaN(delta)) {
-    return { error: 'Datos inválidos.' }
+    return { error: 'Datos inv├ílidos.' }
   }
 
   const nueva_cantidad = cantidad_actual + delta
@@ -169,14 +169,14 @@ export async function ajustarStockAction(
   return { success: true }
 }
 
-// ── ELIMINAR PRODUCTO ──────────────────────────────────────────────────────
+// ÔöÇÔöÇ ELIMINAR PRODUCTO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export async function eliminarProductoAction(
   _prev: InventarioState,
   formData: FormData
 ): Promise<InventarioState> {
   const id_producto = parseInt(formData.get('id_producto') as string)
 
-  if (isNaN(id_producto)) return { error: 'Producto inválido.' }
+  if (isNaN(id_producto)) return { error: 'Producto inv├ílido.' }
 
   const supabase = await getAuthenticatedClient()
   const { error } = await supabase

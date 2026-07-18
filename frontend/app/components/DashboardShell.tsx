@@ -14,6 +14,7 @@ type Props = {
 const NAV_ITEMS = [
   { href: '/mascotas',   icon: 'fa-solid fa-paw',           label: 'Registro de Mascota' },
   { href: '/inventario', icon: 'fa-solid fa-boxes-stacked',  label: 'Control Inventario'  },
+  { href: '/citas',      icon: 'fa-regular fa-calendar-check', label: 'Citas de Hoy'  },
 ]
 
 export default function DashboardShell({ perfil, children }: Props) {
