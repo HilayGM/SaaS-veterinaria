@@ -1,5 +1,6 @@
 'use server'
 
+import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { cookies } from 'next/headers'
@@ -28,28 +29,29 @@ async function getAuthenticatedClient() {
   return supabase
 }
 
-// ── PERFIL DEL USUARIO ACTUAL (sesión + fila en `usuarios`) ────────────────
-export type PerfilUsuario = {
-  id_usuario: string
-  nombre: string
-  correo: string
-  rol: 'Administrador' | 'Veterinario' | 'Recepcionista'
-  id_clinica: number | null
-  nombre_clinica: string | null
-}
+const getCurrentUserProfileByToken = cache(async (accessToken: string) => {
+  const supabase = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    }
+  )
 
-export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-  if (!accessToken) return null
-
-  const supabase = await getAuthenticatedClient()
-
-  // 1. Identificar al usuario a partir del JWT
   const { data: userData, error: userError } = await supabase.auth.getUser(accessToken)
-  if (userError || !userData.user) return null
 
-  // 2. Traer su fila de la tabla `usuarios` (RLS: cada quien solo ve la suya)
+  if (userError) {
+    console.error('[getCurrentUserProfile] auth error:', userError)
+    return null
+  }
+
+  if (!userData.user) {
+    console.error('[getCurrentUserProfile] No se encontró el usuario autenticado.')
+    return null
+  }
+
   const { data: perfil, error: perfilError } = await supabase
     .from('usuarios')
     .select('id_usuario, nombre, correo, rol, id_clinica, clinicas(nombre)')
@@ -71,6 +73,24 @@ export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
     id_clinica: perfil.id_clinica,
     nombre_clinica,
   }
+})
+
+// ── PERFIL DEL USUARIO ACTUAL (sesión + fila en `usuarios`) ────────────────
+export type PerfilUsuario = {
+  id_usuario: string
+  nombre: string
+  correo: string
+  rol: 'Administrador' | 'Veterinario' | 'Recepcionista'
+  id_clinica: number | null
+  nombre_clinica: string | null
+}
+
+export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+  if (!accessToken) return null
+
+  return getCurrentUserProfileByToken(accessToken)
 }
 
 // ── LISTAR INVENTARIO DE LA CLÍNICA DEL USUARIO ─────────────────────────────
