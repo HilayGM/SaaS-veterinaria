@@ -1,8 +1,8 @@
 'use client'
 
-import { useActionState, useState, useTransition, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useActionState, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import DashboardShell from '@/app/components/DashboardShell'
 import {
   registrarMascotaAction,
@@ -26,11 +26,15 @@ function formatearFecha(fecha: string | null) {
 
 export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
   const router = useRouter()
-  const [mascotas, setMascotas] = useState(mascotasIniciales)
+  const [mascotasEliminadas, setMascotasEliminadas] = useState<Set<number>>(() => new Set())
   const [, startTransition] = useTransition()
   const [formKey, setFormKey] = useState(0)
   const [mascotaEditandoReceta, setMascotaEditandoReceta] = useState<MascotaConDueno | null>(null)
   const [busquedaMascota, setBusquedaMascota] = useState('')
+
+  const mascotas = mascotasEliminadas.size === 0
+    ? mascotasIniciales
+    : mascotasIniciales.filter(m => !mascotasEliminadas.has(m.id_mascota))
   const mascotasFiltradas = mascotas.filter(m =>
     m.nombre.toLowerCase().includes(busquedaMascota.toLowerCase())
   )
@@ -194,7 +198,11 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                             mascota={m}
                             onEliminar={() =>
                               startTransition(() =>
-                                setMascotas(prev => prev.filter(x => x.id_mascota !== m.id_mascota))
+                                setMascotasEliminadas(prev => {
+                                  const next = new Set(prev)
+                                  next.add(m.id_mascota)
+                                  return next
+                                })
                               )
                             }
                             onEditarReceta={() => setMascotaEditandoReceta(m)}
@@ -251,6 +259,10 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
         <ModalReceta
           mascota={mascotaEditandoReceta}
           onClose={() => setMascotaEditandoReceta(null)}
+          onSaved={() => {
+            setMascotaEditandoReceta(null)
+            router.refresh()
+          }}
         />
       )}
 
@@ -409,17 +421,30 @@ function FilaMascota({ mascota, onEliminar, onEditarReceta }: { mascota: Mascota
       <td style={{ color: '#64748b', fontSize: '.82rem' }}>{formatearFecha(mascota.fecha_nacimiento)}</td>
       <td style={{ fontSize: '.85rem' }}>{mascota.dueno?.nombre ?? '—'}</td>
       <td>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onEditarReceta} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }} title="Editar Receta">
-            <i className="fa-solid fa-notes-medical" />
-          </button>
-          <Link href={`/mascotas/detalle/${mascota.id_mascota}`} style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }} title="Ver Perfil (Expediente y Vacunas)">
-            <i className="fa-solid fa-address-card" />
-            Ver Perfil
+        <button onClick={onEditarReceta} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <i className="fa-solid fa-notes-medical" />
+          Receta
+        </button>
+      </td>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Link
+            href={`/expedientes?idMascota=${mascota.id_mascota}`}
+            style={{ background: '#eef2ff', color: '#1d4ed8', border: '1px solid #c7d2fe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }}
+          >
+            <i className="fa-solid fa-clock-rotate-left" />
+            Historial
+          </Link>
+          <Link
+            href={`/vacunas?idMascota=${mascota.id_mascota}`}
+            style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }}
+          >
+            <i className="fa-solid fa-syringe" />
+            Vacunas
           </Link>
           <form action={formActionEliminar} onSubmit={e => { if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) e.preventDefault() }}>
             <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
-            <button type="submit" disabled={pendingEliminar} style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', borderRadius: 8, padding: '6px 12px', fontSize: '.9rem', display: 'flex', alignItems: 'center' }} title="Eliminar">
+            <button type="submit" disabled={pendingEliminar} style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem', padding: 4 }}>
               <i className="fa-solid fa-trash" />
             </button>
           </form>
@@ -429,11 +454,11 @@ function FilaMascota({ mascota, onEliminar, onEditarReceta }: { mascota: Mascota
   )
 }
 
-function ModalReceta({ mascota, onClose }: { mascota: MascotaConDueno; onClose: () => void }) {
+function ModalReceta({ mascota, onClose, onSaved }: { mascota: MascotaConDueno; onClose: () => void; onSaved: () => void }) {
   const [recetaState, formActionReceta, pendingReceta] = useActionState<MascotaState, FormData>(
     async (prev, formData) => {
       const result = await actualizarRecetaAction(prev, formData)
-      if (result?.success) onClose()
+      if (result?.success) onSaved()
       return result
     },
     null
