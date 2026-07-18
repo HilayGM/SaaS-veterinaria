@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useMemo, useState, useTransition, type CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   agregarProductoAction,
   ajustarStockAction,
@@ -34,15 +35,35 @@ function formatearFecha(fecha: string | null) {
 }
 
 export default function InventarioClient({ perfil, productosIniciales }: Props) {
-  const [productos, setProductos] = useState(productosIniciales)
+  const router = useRouter()
+  const [productosLocales, setProductosLocales] = useState<Record<number, ProductoInventario | null>>({})
   const [busqueda, setBusqueda] = useState('')
   const [mostrarFormAlta, setMostrarFormAlta] = useState(false)
   const [, startTransition] = useTransition()
 
   const [altaState, altaFormAction, altaPending] = useActionState<InventarioState, FormData>(
-    agregarProductoAction,
+    async (prev, formData) => {
+      const result = await agregarProductoAction(prev, formData)
+      if (result?.success) {
+        setMostrarFormAlta(false)
+        startTransition(() => {
+          router.refresh()
+        })
+      }
+      return result
+    },
     null
   )
+
+  const productos = useMemo(() => (
+    productosIniciales
+      .map(producto => (
+        Object.prototype.hasOwnProperty.call(productosLocales, producto.id_producto)
+          ? productosLocales[producto.id_producto]
+          : producto
+      ))
+      .filter((producto): producto is ProductoInventario => producto !== null)
+  ), [productosIniciales, productosLocales])
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -52,10 +73,6 @@ export default function InventarioClient({ perfil, productosIniciales }: Props) 
 
   const vencidos = productos.filter(p => estadoCaducidad(p.fecha_caducidad) === 'vencido').length
   const porVencer = productos.filter(p => estadoCaducidad(p.fecha_caducidad) === 'por-vencer').length
-
-  if (altaState?.success && mostrarFormAlta) {
-    setMostrarFormAlta(false)
-  }
 
   return (
     <DashboardShell perfil={perfil}>
@@ -176,11 +193,10 @@ export default function InventarioClient({ perfil, productosIniciales }: Props) 
                       producto={p}
                       onChange={(actualizado) => {
                         startTransition(() => {
-                          setProductos(prev =>
-                            actualizado === null
-                              ? prev.filter(x => x.id_producto !== p.id_producto)
-                              : prev.map(x => (x.id_producto === p.id_producto ? actualizado : x))
-                          )
+                          setProductosLocales(prev => ({
+                            ...prev,
+                            [p.id_producto]: actualizado,
+                          }))
                         })
                       }}
                     />
