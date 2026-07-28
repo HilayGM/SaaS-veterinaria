@@ -39,10 +39,11 @@ export async function getCitas(): Promise<CitaConMascota[]> {
   )
 
   // 1. Mascotas de la clínica con su dueño
-  const { data: mascotas, error: mError } = await adminSupabase
+  const { data: mascotasData, error: mError } = await adminSupabase
     .from('mascotas')
     .select('id_mascota, nombre, id_dueño')
     .eq('id_clinica', perfil.id_clinica)
+  const mascotas = mascotasData as any[] | null
 
   if (mError || !mascotas?.length) return []
 
@@ -54,10 +55,11 @@ export async function getCitas(): Promise<CitaConMascota[]> {
   const duenioMap: Record<number, string> = {}
 
   if (idsDuenos.length > 0) {
-    const { data: duenos } = await adminSupabase
+    const { data: duenosData } = await adminSupabase
       .from('clientes_duenos')
       .select('id_dueño, nombre')
       .in('id_dueño', idsDuenos)
+    const duenos = duenosData as any[] | null
     duenos?.forEach(d => { duenioMap[d.id_dueño] = d.nombre })
   }
 
