@@ -13,6 +13,9 @@ type Props = {
 
 const NAV_ITEMS = [
   { href: '/mascotas',   icon: 'fa-solid fa-paw',           label: 'Registro de Mascota' },
+  { href: '/vacunas',    icon: 'fa-solid fa-syringe',       label: 'Vacunas'              },
+  { href: '/expedientes', icon: 'fa-solid fa-notes-medical', label: 'Expedientes'          },
+  { href: '/citas',      icon: 'fa-solid fa-calendar-check', label: 'Citas'                },
   { href: '/inventario', icon: 'fa-solid fa-boxes-stacked',  label: 'Control Inventario'  },
 ]
 

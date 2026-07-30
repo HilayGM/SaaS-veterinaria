@@ -111,3 +111,43 @@ WITH CHECK (id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuari
 -- que aún no existe en este script. Si se quiere mantener el formulario
 -- de "solicitar demo" funcionando, falta crear esa tabla por separado.
 -- =========================================================
+
+-- =========================================================
+-- 4. POLÍTICAS Y VISTAS ADICIONALES (Módulo de Citas)
+-- =========================================================
+
+-- Habilitar RLS en Citas
+ALTER TABLE public.citas ENABLE ROW LEVEL SECURITY;
+
+-- Política para aislar citas por clínica
+CREATE POLICY "Aislamiento Multitenant de Citas"
+ON public.citas
+FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.mascotas 
+    WHERE mascotas.id_mascota = citas.id_mascota
+    AND mascotas.id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid())
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.mascotas 
+    WHERE mascotas.id_mascota = citas.id_mascota
+    AND mascotas.id_clinica = (SELECT id_clinica FROM public.usuarios WHERE id_usuario = auth.uid())
+  )
+);
+
+-- Vista para citas del día
+CREATE OR REPLACE VIEW public.vw_citas_hoy AS
+SELECT 
+    c.id_cita,
+    c.fecha,
+    c.estado,
+    m.nombre AS mascota_nombre,
+    d.nombre AS propietario_nombre
+FROM public.citas c
+JOIN public.mascotas m ON c.id_mascota = m.id_mascota
+LEFT JOIN public.clientes_duenos d ON m.id_dueño = d.id_dueño
+WHERE c.fecha >= CURRENT_DATE
+  AND c.fecha < CURRENT_DATE + INTERVAL '1 day';

@@ -1,12 +1,11 @@
-'use server'
+﻿'use server'
 
-import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
-// ── Tipos ──────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇ Tipos ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export type InventarioState = {
   error?: string
   success?: boolean
@@ -29,29 +28,28 @@ async function getAuthenticatedClient() {
   return supabase
 }
 
-const getCurrentUserProfileByToken = cache(async (accessToken: string) => {
-  const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    }
-  )
+// ÔöÇÔöÇ PERFIL DEL USUARIO ACTUAL (sesi├│n + fila en `usuarios`) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+export type PerfilUsuario = {
+  id_usuario: string
+  nombre: string
+  correo: string
+  rol: 'Administrador' | 'Veterinario' | 'Recepcionista'
+  id_clinica: number | null
+  nombre_clinica: string | null
+}
 
+export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+  if (!accessToken) return null
+
+  const supabase = await getAuthenticatedClient()
+
+  // 1. Identificar al usuario a partir del JWT
   const { data: userData, error: userError } = await supabase.auth.getUser(accessToken)
+  if (userError || !userData.user) return null
 
-  if (userError) {
-    console.error('[getCurrentUserProfile] auth error:', userError)
-    return null
-  }
-
-  if (!userData.user) {
-    console.error('[getCurrentUserProfile] No se encontró el usuario autenticado.')
-    return null
-  }
-
+  // 2. Traer su fila de la tabla `usuarios` (RLS: cada quien solo ve la suya)
   const { data: perfil, error: perfilError } = await supabase
     .from('usuarios')
     .select('id_usuario, nombre, correo, rol, id_clinica, clinicas(nombre)')
@@ -73,27 +71,9 @@ const getCurrentUserProfileByToken = cache(async (accessToken: string) => {
     id_clinica: perfil.id_clinica,
     nombre_clinica,
   }
-})
-
-// ── PERFIL DEL USUARIO ACTUAL (sesión + fila en `usuarios`) ────────────────
-export type PerfilUsuario = {
-  id_usuario: string
-  nombre: string
-  correo: string
-  rol: 'Administrador' | 'Veterinario' | 'Recepcionista'
-  id_clinica: number | null
-  nombre_clinica: string | null
 }
 
-export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-  if (!accessToken) return null
-
-  return getCurrentUserProfileByToken(accessToken)
-}
-
-// ── LISTAR INVENTARIO DE LA CLÍNICA DEL USUARIO ─────────────────────────────
+// ÔöÇÔöÇ LISTAR INVENTARIO DE LA CL├ìNICA DEL USUARIO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export type ProductoInventario = {
   id_producto: number
   nombre: string
@@ -104,9 +84,9 @@ export type ProductoInventario = {
 
 export async function getInventario(): Promise<ProductoInventario[]> {
   const supabase = await getAuthenticatedClient()
-  // No filtramos id_clinica explícitamente: RLS ya garantiza el aislamiento
-  // multitenant, así que esta consulta solo regresa los productos de la
-  // clínica del usuario autenticado (o vacío si no tiene clínica/sesión).
+  // No filtramos id_clinica expl├¡citamente: RLS ya garantiza el aislamiento
+  // multitenant, as├¡ que esta consulta solo regresa los productos de la
+  // cl├¡nica del usuario autenticado (o vac├¡o si no tiene cl├¡nica/sesi├│n).
   const { data, error } = await supabase
     .from('inventario')
     .select('id_producto, nombre, cantidad, fecha_caducidad, id_clinica')
@@ -119,7 +99,7 @@ export async function getInventario(): Promise<ProductoInventario[]> {
   return data ?? []
 }
 
-// ── AGREGAR PRODUCTO ──────────────────────────────────────────────────────
+// ÔöÇÔöÇ AGREGAR PRODUCTO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export async function agregarProductoAction(
   _prev: InventarioState,
   formData: FormData
@@ -133,11 +113,11 @@ export async function agregarProductoAction(
 
   const cantidad = parseInt(cantidad_str)
   if (isNaN(cantidad) || cantidad < 0) {
-    return { error: 'La cantidad debe ser un número positivo.' }
+    return { error: 'La cantidad debe ser un n├║mero positivo.' }
   }
 
   const id_clinica = id_clinica_str ? parseInt(id_clinica_str) : null
-  if (!id_clinica) return { error: 'No se detectó la clínica del usuario.' }
+  if (!id_clinica) return { error: 'No se detect├│ la cl├¡nica del usuario.' }
 
   const supabase = await getAuthenticatedClient()
   const { error } = await supabase.from('inventario').insert({
@@ -156,7 +136,7 @@ export async function agregarProductoAction(
   return { success: true }
 }
 
-// ── AJUSTAR STOCK (sumar o restar) ────────────────────────────────────────
+// ÔöÇÔöÇ AJUSTAR STOCK (sumar o restar) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export async function ajustarStockAction(
   _prev: InventarioState,
   formData: FormData
@@ -166,7 +146,7 @@ export async function ajustarStockAction(
   const cantidad_actual = parseInt(formData.get('cantidad_actual') as string)
 
   if (isNaN(id_producto) || isNaN(delta)) {
-    return { error: 'Datos inválidos.' }
+    return { error: 'Datos inv├ílidos.' }
   }
 
   const nueva_cantidad = cantidad_actual + delta
@@ -189,14 +169,14 @@ export async function ajustarStockAction(
   return { success: true }
 }
 
-// ── ELIMINAR PRODUCTO ──────────────────────────────────────────────────────
+// ÔöÇÔöÇ ELIMINAR PRODUCTO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 export async function eliminarProductoAction(
   _prev: InventarioState,
   formData: FormData
 ): Promise<InventarioState> {
   const id_producto = parseInt(formData.get('id_producto') as string)
 
-  if (isNaN(id_producto)) return { error: 'Producto inválido.' }
+  if (isNaN(id_producto)) return { error: 'Producto inv├ílido.' }
 
   const supabase = await getAuthenticatedClient()
   const { error } = await supabase

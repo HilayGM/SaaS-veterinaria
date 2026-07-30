@@ -51,10 +51,10 @@ export default function LandingPage() {
         </div>
 
         <div className="hero-image">
-          <img
-            src="https://thumbs.dreamstime.com/b/perro-veterinario-18384165.jpg"
-            alt="Perro"
-          />
+            <img
+                 src="/images/perro.png"
+                   alt="Perro veterinario"
+             />
         </div>
 
         <svg

@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState, useTransition, useEffect } from 'react'
+import { useActionState, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import DashboardShell from '@/app/components/DashboardShell'
 import {
@@ -25,15 +26,18 @@ function formatearFecha(fecha: string | null) {
 
 export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
   const router = useRouter()
-  const [mascotas, setMascotas] = useState(mascotasIniciales)
+  const [mascotasEliminadas, setMascotasEliminadas] = useState<Set<number>>(() => new Set())
   const [, startTransition] = useTransition()
   const [formKey, setFormKey] = useState(0)
   const [mascotaEditandoReceta, setMascotaEditandoReceta] = useState<MascotaConDueno | null>(null)
+  const [busquedaMascota, setBusquedaMascota] = useState('')
 
-  // Sincroniza la lista cuando el servidor refetch tras revalidatePath
-  useEffect(() => {
-    setMascotas(mascotasIniciales)
-  }, [mascotasIniciales])
+  const mascotas = mascotasEliminadas.size === 0
+    ? mascotasIniciales
+    : mascotasIniciales.filter(m => !mascotasEliminadas.has(m.id_mascota))
+  const mascotasFiltradas = mascotas.filter(m =>
+    m.nombre.toLowerCase().includes(busquedaMascota.toLowerCase())
+  )
 
   const [state, formAction, pending] = useActionState<MascotaState, FormData>(
     async (prev, formData) => {
@@ -150,6 +154,16 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                 </span>
               </h3>
 
+              <div className="mas-search">
+                <i className="fa-solid fa-magnifying-glass" />
+                <input
+                  type="text"
+                  value={busquedaMascota}
+                  onChange={e => setBusquedaMascota(e.target.value)}
+                  placeholder="Buscar mascota por nombre..."
+                />
+              </div>
+
               {mascotas.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8' }}>
                   <i className="fa-solid fa-paw" style={{ fontSize: '2rem', display: 'block', marginBottom: 10 }} />
@@ -157,32 +171,46 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                  <table className="mas-table">
-                    <thead>
-                      <tr>
-                        <th>Paciente</th>
-                        <th>Especie / Raza</th>
-                        <th>Nacimiento</th>
-                        <th>Propietario</th>
-                        <th>Receta</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mascotas.map(m => (
-                        <FilaMascota
-                          key={m.id_mascota}
-                          mascota={m}
-                          onEliminar={() =>
-                            startTransition(() =>
-                              setMascotas(prev => prev.filter(x => x.id_mascota !== m.id_mascota))
-                            )
-                          }
-                          onEditarReceta={() => setMascotaEditandoReceta(m)}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
+                  {mascotasFiltradas.length === 0 ? (
+                    <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8', background: '#fff' }}>
+                      <i className="fa-solid fa-magnifying-glass" style={{ fontSize: '1.8rem', display: 'block', marginBottom: 10 }} />
+                      <p style={{ fontSize: '.88rem', color: '#64748b', fontWeight: 600, marginBottom: 4 }}>
+                        No se encontraron mascotas con ese nombre.
+                      </p>
+                      <p style={{ fontSize: '.8rem' }}>Intenta escribir otro nombre.</p>
+                    </div>
+                  ) : (
+                    <table className="mas-table">
+                      <thead>
+                        <tr>
+                          <th>Paciente</th>
+                          <th>Especie / Raza</th>
+                          <th>Nacimiento</th>
+                          <th>Propietario</th>
+                          <th>Receta</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mascotasFiltradas.map(m => (
+                          <FilaMascota
+                            key={m.id_mascota}
+                            mascota={m}
+                            onEliminar={() =>
+                              startTransition(() =>
+                                setMascotasEliminadas(prev => {
+                                  const next = new Set(prev)
+                                  next.add(m.id_mascota)
+                                  return next
+                                })
+                              )
+                            }
+                            onEditarReceta={() => setMascotaEditandoReceta(m)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
             </div>
@@ -231,6 +259,10 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
         <ModalReceta
           mascota={mascotaEditandoReceta}
           onClose={() => setMascotaEditandoReceta(null)}
+          onSaved={() => {
+            setMascotaEditandoReceta(null)
+            router.refresh()
+          }}
         />
       )}
 
@@ -276,6 +308,19 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
         }
         .mas-alert-error  { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
         .mas-alert-success { background: #f0fdf4; border: 1px solid #86efac; color: #16a34a; }
+        .mas-search {
+          display: flex; align-items: center; gap: 10px;
+          padding: 12px 14px; margin-bottom: 16px;
+          border: 1.5px solid #e2e8f0; border-radius: 10px;
+          background: #f8fafc; color: #94a3b8;
+        }
+        .mas-search:focus-within { border-color: #22d3ee; background: #fff; }
+        .mas-search input {
+          border: none; outline: none; background: transparent;
+          width: 100%; font-family: 'Poppins', sans-serif;
+          font-size: .88rem; color: #0f172a;
+        }
+        .mas-search input::placeholder { color: #94a3b8; }
         .mas-table { width: 100%; border-collapse: collapse; font-size: .85rem; font-family: 'Poppins', sans-serif; }
         .mas-table th {
           padding: 12px 16px; text-align: left; background: #f8fafc;
@@ -382,22 +427,38 @@ function FilaMascota({ mascota, onEliminar, onEditarReceta }: { mascota: Mascota
         </button>
       </td>
       <td>
-        <form action={formActionEliminar} onSubmit={e => { if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) e.preventDefault() }}>
-          <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
-          <button type="submit" disabled={pendingEliminar} style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem', padding: 4 }}>
-            <i className="fa-solid fa-trash" />
-          </button>
-        </form>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Link
+            href={`/expedientes?idMascota=${mascota.id_mascota}`}
+            style={{ background: '#eef2ff', color: '#1d4ed8', border: '1px solid #c7d2fe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }}
+          >
+            <i className="fa-solid fa-clock-rotate-left" />
+            Historial
+          </Link>
+          <Link
+            href={`/vacunas?idMascota=${mascota.id_mascota}`}
+            style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }}
+          >
+            <i className="fa-solid fa-syringe" />
+            Vacunas
+          </Link>
+          <form action={formActionEliminar} onSubmit={e => { if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) e.preventDefault() }}>
+            <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
+            <button type="submit" disabled={pendingEliminar} style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem', padding: 4 }}>
+              <i className="fa-solid fa-trash" />
+            </button>
+          </form>
+        </div>
       </td>
     </tr>
   )
 }
 
-function ModalReceta({ mascota, onClose }: { mascota: MascotaConDueno; onClose: () => void }) {
+function ModalReceta({ mascota, onClose, onSaved }: { mascota: MascotaConDueno; onClose: () => void; onSaved: () => void }) {
   const [recetaState, formActionReceta, pendingReceta] = useActionState<MascotaState, FormData>(
     async (prev, formData) => {
       const result = await actualizarRecetaAction(prev, formData)
-      if (result?.success) onClose()
+      if (result?.success) onSaved()
       return result
     },
     null
