@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 export default function LandingPage() {
@@ -51,10 +52,27 @@ export default function LandingPage() {
         </div>
 
         <div className="hero-image">
-          <img
-            src="https://thumbs.dreamstime.com/b/perro-veterinario-18384165.jpg"
-            alt="Perro"
+          <div className="hero-image-glow" aria-hidden="true"></div>
+
+          <Image
+            className="hero-dog"
+            src="/images/veterinary-dog-cutout.png"
+            alt="Perro labrador con estetoscopio"
+            width={837}
+            height={1102}
+            sizes="(max-width: 768px) 78vw, (max-width: 1100px) 46vw, 38vw"
+            preload
           />
+
+          <div className="hero-pet-card">
+            <span className="hero-pet-card-icon">
+              <i className="fa-solid fa-shield-dog"></i>
+            </span>
+            <span>
+              <strong>Cuidado inteligente</strong>
+              <small>Todo bajo control</small>
+            </span>
+          </div>
         </div>
 
         <svg
