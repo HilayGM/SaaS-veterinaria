@@ -183,14 +183,111 @@ nav ul li a:hover{
 
 .hero-image{
     position:absolute;
-    right:6%;
-    bottom:0;
+    right:4%;
+    bottom:24px;
+    width:min(39vw,560px);
+    height:min(76vh,700px);
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
     z-index:2;
+    isolation:isolate;
 }
 
-.hero-image img{
-    width:520px;
-    filter:drop-shadow(0 20px 40px rgba(0,0,0,.3));
+.hero-image::before,
+.hero-image::after{
+    content:'';
+    position:absolute;
+    border-radius:50%;
+    pointer-events:none;
+}
+
+.hero-image::before{
+    width:88%;
+    aspect-ratio:1;
+    right:-1%;
+    bottom:9%;
+    z-index:-2;
+    background:
+        radial-gradient(circle at 45% 40%,rgba(103,232,249,.26),rgba(34,211,238,.08) 55%,transparent 72%);
+    filter:blur(3px);
+}
+
+.hero-image::after{
+    width:68%;
+    aspect-ratio:1;
+    right:8%;
+    bottom:18%;
+    z-index:-1;
+    border:1px solid rgba(165,243,252,.22);
+    box-shadow:
+        0 0 0 34px rgba(34,211,238,.035),
+        0 0 0 70px rgba(34,211,238,.025);
+}
+
+.hero-image-glow{
+    position:absolute;
+    width:74%;
+    height:20%;
+    right:8%;
+    bottom:2%;
+    z-index:-1;
+    border-radius:50%;
+    background:rgba(2,6,23,.52);
+    filter:blur(28px);
+    transform:perspective(280px) rotateX(64deg);
+}
+
+.hero-dog{
+    width:auto;
+    height:100%;
+    max-width:100%;
+    object-fit:contain;
+    object-position:center bottom;
+    filter:drop-shadow(0 24px 32px rgba(0,0,0,.32));
+}
+
+.hero-pet-card{
+    position:absolute;
+    left:-5%;
+    top:32%;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 16px;
+    border:1px solid rgba(255,255,255,.22);
+    border-radius:18px;
+    color:white;
+    background:rgba(4,19,66,.68);
+    box-shadow:0 18px 45px rgba(0,0,0,.22);
+    backdrop-filter:blur(12px);
+}
+
+.hero-pet-card-icon{
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    flex:0 0 42px;
+    border-radius:13px;
+    color:#03245f;
+    background:#67e8f9;
+}
+
+.hero-pet-card span:last-child{
+    display:flex;
+    flex-direction:column;
+}
+
+.hero-pet-card strong{
+    font-size:.9rem;
+    white-space:nowrap;
+}
+
+.hero-pet-card small{
+    margin-top:2px;
+    color:#bae6fd;
+    font-size:.75rem;
 }
 
 /* WAVE */
@@ -436,12 +533,22 @@ footer{
 
     .hero-image{
         position:relative;
-        right:0;
-        margin-top:50px;
+        right:auto;
+        bottom:auto;
+        width:min(480px,82vw);
+        height:auto;
+        margin-top:48px;
     }
 
-    .hero-image img{
-        width:360px;
+    .hero-dog{
+        width:100%;
+        height:auto;
+        max-height:600px;
+    }
+
+    .hero-pet-card{
+        left:-4%;
+        top:34%;
     }
 
 }
@@ -454,6 +561,23 @@ footer{
 
     .hero-content h1{
         font-size:3rem;
+    }
+
+    .hero-image{
+        width:min(400px,88vw);
+        margin-top:38px;
+    }
+
+    .hero-pet-card{
+        left:0;
+        top:36%;
+        padding:10px 12px;
+    }
+
+    .hero-pet-card-icon{
+        width:36px;
+        height:36px;
+        flex-basis:36px;
     }
 
     .section-title h2{
