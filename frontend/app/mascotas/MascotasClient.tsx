@@ -1,15 +1,15 @@
 'use client'
 
-import { useActionState, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useActionState, useState, useTransition, type ReactNode } from 'react'
 import DashboardShell from '@/app/components/DashboardShell'
 import {
-  registrarMascotaAction,
+  actualizarRecetaAction,
   eliminarMascotaAction,
-  actualizarRecetaAction
+  registrarMascotaAction,
 } from '@/app/actions/mascotas'
-import type { MascotaState, MascotaConDueno, PerfilUsuario } from '@/app/actions/mascotas'
+import type { MascotaConDueno, MascotaState, PerfilUsuario } from '@/app/actions/mascotas'
 
 type Props = {
   perfil: PerfilUsuario
@@ -20,8 +20,8 @@ const ESPECIES = ['Perro', 'Gato', 'Ave', 'Conejo', 'Reptil', 'Otro']
 
 function formatearFecha(fecha: string | null) {
   if (!fecha) return '—'
-  const [y, m, d] = fecha.split('-')
-  return `${d}/${m}/${y}`
+  const [year, month, day] = fecha.split('-')
+  return `${day}/${month}/${year}`
 }
 
 export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
@@ -34,153 +34,241 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
 
   const mascotas = mascotasEliminadas.size === 0
     ? mascotasIniciales
-    : mascotasIniciales.filter(m => !mascotasEliminadas.has(m.id_mascota))
-  const mascotasFiltradas = mascotas.filter(m =>
-    m.nombre.toLowerCase().includes(busquedaMascota.toLowerCase())
+    : mascotasIniciales.filter((mascota) => !mascotasEliminadas.has(mascota.id_mascota))
+
+  const mascotasFiltradas = mascotas.filter((mascota) =>
+    mascota.nombre.toLowerCase().includes(busquedaMascota.toLowerCase()),
   )
 
   const [state, formAction, pending] = useActionState<MascotaState, FormData>(
-    async (prev, formData) => {
-      const result = await registrarMascotaAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await registrarMascotaAction(previousState, formData)
       if (result?.success) {
-        setFormKey(k => k + 1)
-        router.refresh() // fuerza al Server Component a re-ejecutar getMascotas()
+        setFormKey((key) => key + 1)
+        router.refresh()
       }
       return result
     },
-    null
+    null,
   )
+
+  const resumen = [
+    {
+      value: mascotas.length,
+      label: 'Pacientes registrados',
+      icon: 'fa-solid fa-paw',
+    },
+    {
+      value: mascotas.filter((mascota) => mascota.especie === 'Perro').length,
+      label: 'Perros',
+      icon: 'fa-solid fa-dog',
+    },
+    {
+      value: mascotas.filter((mascota) => mascota.especie === 'Gato').length,
+      label: 'Gatos',
+      icon: 'fa-solid fa-cat',
+    },
+  ]
 
   return (
     <DashboardShell perfil={perfil}>
-      <div style={{ padding: '36px 40px 60px', minWidth: 0 }}>
-
-        {/* Encabezado */}
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: '1.7rem', fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
-            Registro de Mascota
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '.9rem' }}>
-            Ingresa los datos del nuevo paciente en el sistema.
-          </p>
-        </div>
-
-        {/* Grid: formulario + guía */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
-
-          {/* ── COLUMNA IZQUIERDA ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-            {/* Formulario */}
-            <div className="mas-card">
-              <form key={formKey} action={formAction}>
-
-                {state?.error && (
-                  <div className="mas-alert mas-alert-error">
-                    <i className="fa-solid fa-circle-exclamation" /> {state.error}
-                  </div>
-                )}
-                {state?.success && (
-                  <div className="mas-alert mas-alert-success">
-                    <i className="fa-solid fa-circle-check" /> Mascota registrada correctamente.
-                  </div>
-                )}
-
-                <input type="hidden" name="id_clinica" value={perfil.id_clinica ?? ''} />
-
-                <SectionTitle title="Información de la Mascota" />
-                <div className="mas-form-grid">
-                  <Field label="NOMBRE">
-                    <input name="nombre" type="text" placeholder="Ej. Max" required disabled={pending} />
-                  </Field>
-                  <Field label="ESPECIE">
-                    <select name="especie" required disabled={pending} defaultValue="">
-                      <option value="" disabled>Seleccione especie</option>
-                      {ESPECIES.map(e => <option key={e} value={e}>{e}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="RAZA">
-                    <input name="raza" type="text" placeholder="Ej. Labrador" disabled={pending} />
-                  </Field>
-                  <Field label="FECHA DE NACIMIENTO">
-                    <input name="fecha_nacimiento" type="date" disabled={pending} />
-                  </Field>
-                </div>
-
-                <div style={{ marginTop: 24 }}>
-                  <SectionTitle title="Información del Propietario" />
-                  <div className="mas-form-grid">
-                    <Field label="NOMBRE COMPLETO">
-                      <input name="nombre_dueno" type="text" placeholder="Nombre del dueño" required disabled={pending} />
-                    </Field>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 24 }}>
-                  <SectionTitle title="Receta Médica (Opcional)" />
-                  <div className="mas-form-grid">
-                    <Field label="MEDICAMENTO">
-                      <input name="medicamento" type="text" placeholder="Ej. Amoxicilina" disabled={pending} />
-                    </Field>
-                    <Field label="DOSIS">
-                      <input name="dosis" type="text" placeholder="Ej. 1 tableta (500mg)" disabled={pending} />
-                    </Field>
-                    <Field label="FRECUENCIA">
-                      <input name="frecuencia" type="text" placeholder="Ej. Cada 8 horas" disabled={pending} />
-                    </Field>
-                    <Field label="DURACIÓN">
-                      <input name="duracion" type="text" placeholder="Ej. 7 días" disabled={pending} />
-                    </Field>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
-                  <button type="submit" className="mas-btn-primary" disabled={pending}>
-                    {pending
-                      ? <><i className="fa-solid fa-circle-notch fa-spin" /> Guardando...</>
-                      : <><i className="fa-solid fa-floppy-disk" /> Guardar Paciente</>}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Tabla de pacientes */}
-            <div className="mas-card">
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#0f172a', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="fa-solid fa-list" />
-                Pacientes registrados
-                <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99 }}>
-                  {mascotas.length}
-                </span>
-              </h3>
-
-              <div className="mas-search">
-                <i className="fa-solid fa-magnifying-glass" />
-                <input
-                  type="text"
-                  value={busquedaMascota}
-                  onChange={e => setBusquedaMascota(e.target.value)}
-                  placeholder="Buscar mascota por nombre..."
-                />
+      <div className="module-page">
+        <div className="module-container is-wide">
+          <header className="module-header">
+            <div className="module-header__identity">
+              <span className="module-header__icon">
+                <i className="fa-solid fa-paw" />
+              </span>
+              <div>
+                <span className="module-eyebrow">Gestión de pacientes</span>
+                <h1 className="module-title">Registro de Mascotas</h1>
+                <p className="module-subtitle">
+                  Crea el perfil clínico del paciente y vincula los datos de su propietario.
+                </p>
               </div>
+            </div>
+          </header>
 
-              {mascotas.length === 0 ? (
-                <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8' }}>
-                  <i className="fa-solid fa-paw" style={{ fontSize: '2rem', display: 'block', marginBottom: 10 }} />
-                  <p style={{ fontSize: '.88rem' }}>Aún no hay mascotas registradas en esta clínica.</p>
+          <div className="module-overview" aria-label="Resumen de pacientes">
+            {resumen.map((item) => (
+              <div key={item.label} className="module-overview__item">
+                <span className="module-overview__icon">
+                  <i className={item.icon} />
+                </span>
+                <span className="module-overview__content">
+                  <strong className="module-overview__value">{item.value}</strong>
+                  <span className="module-overview__label">{item.label}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="module-workspace">
+            <div className="module-workspace__body">
+              <section className="module-workspace__section">
+                <div className="module-workspace__header">
+                  <div>
+                    <span className="module-eyebrow">Nuevo ingreso</span>
+                    <h2 className="module-workspace__title">Datos del paciente</h2>
+                  </div>
+                  <span className="module-workspace__step">Formulario clínico</span>
                 </div>
-              ) : (
-                <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                  {mascotasFiltradas.length === 0 ? (
-                    <div style={{ padding: '48px 20px', textAlign: 'center', color: '#94a3b8', background: '#fff' }}>
-                      <i className="fa-solid fa-magnifying-glass" style={{ fontSize: '1.8rem', display: 'block', marginBottom: 10 }} />
-                      <p style={{ fontSize: '.88rem', color: '#64748b', fontWeight: 600, marginBottom: 4 }}>
-                        No se encontraron mascotas con ese nombre.
-                      </p>
-                      <p style={{ fontSize: '.8rem' }}>Intenta escribir otro nombre.</p>
+                <form key={formKey} action={formAction}>
+                  {state?.error && (
+                    <div className="module-alert is-error">
+                      <i className="fa-solid fa-circle-exclamation" />
+                      {state.error}
                     </div>
-                  ) : (
-                    <table className="mas-table">
+                  )}
+                  {state?.success && (
+                    <div className="module-alert is-success">
+                      <i className="fa-solid fa-circle-check" />
+                      Mascota registrada correctamente.
+                    </div>
+                  )}
+
+                  <input type="hidden" name="id_clinica" value={perfil.id_clinica ?? ''} />
+
+                  <div className="module-inline-note">
+                    <i className="fa-solid fa-circle-info" />
+                    <span>
+                      Nombre, especie y propietario son obligatorios. La receta puede completarse
+                      ahora o actualizarse después desde la lista.
+                    </span>
+                  </div>
+
+                  <SectionTitle title="Información de la Mascota" />
+                  <div className="module-form-grid">
+                    <Field label="Nombre">
+                      <input name="nombre" type="text" placeholder="Ej. Max" required disabled={pending} />
+                    </Field>
+                    <Field label="Especie">
+                      <select name="especie" required disabled={pending} defaultValue="">
+                        <option value="" disabled>Seleccione especie</option>
+                        {ESPECIES.map((especie) => (
+                          <option key={especie} value={especie}>{especie}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Raza">
+                      <input name="raza" type="text" placeholder="Ej. Labrador" disabled={pending} />
+                    </Field>
+                    <Field label="Fecha de nacimiento">
+                      <input name="fecha_nacimiento" type="date" disabled={pending} />
+                    </Field>
+                  </div>
+
+                  <div className="module-section-spacer">
+                    <SectionTitle title="Información del Propietario" />
+                    <div className="module-form-grid">
+                      <Field label="Nombre completo">
+                        <input
+                          name="nombre_dueno"
+                          type="text"
+                          placeholder="Nombre del propietario"
+                          required
+                          disabled={pending}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+
+                  <details className="module-disclosure module-section-spacer">
+                    <summary>
+                      <span>
+                        <i className="fa-solid fa-prescription" />
+                        Añadir receta médica inicial
+                      </span>
+                      <i className="fa-solid fa-chevron-down module-disclosure__chevron" />
+                    </summary>
+                    <div className="module-form-grid">
+                      <Field label="Medicamento">
+                        <input
+                          name="medicamento"
+                          type="text"
+                          placeholder="Ej. Amoxicilina"
+                          disabled={pending}
+                        />
+                      </Field>
+                      <Field label="Dosis">
+                        <input
+                          name="dosis"
+                          type="text"
+                          placeholder="Ej. 1 tableta (500 mg)"
+                          disabled={pending}
+                        />
+                      </Field>
+                      <Field label="Frecuencia">
+                        <input
+                          name="frecuencia"
+                          type="text"
+                          placeholder="Ej. Cada 8 horas"
+                          disabled={pending}
+                        />
+                      </Field>
+                      <Field label="Duración">
+                        <input
+                          name="duracion"
+                          type="text"
+                          placeholder="Ej. 7 días"
+                          disabled={pending}
+                        />
+                      </Field>
+                    </div>
+                  </details>
+
+                  <div className="module-form-actions">
+                    <button type="submit" className="module-button is-primary" disabled={pending}>
+                      {pending ? (
+                        <>
+                          <i className="fa-solid fa-circle-notch fa-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-floppy-disk" />
+                          Guardar Paciente
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="module-workspace__section">
+                <div className="module-workspace__header">
+                  <div>
+                    <span className="module-eyebrow">Directorio clínico</span>
+                    <h2 className="module-workspace__title">Pacientes registrados</h2>
+                  </div>
+                  <span className="module-count">{mascotas.length}</span>
+                </div>
+
+                <div className="module-search">
+                  <i className="fa-solid fa-magnifying-glass" />
+                  <input
+                    type="text"
+                    value={busquedaMascota}
+                    onChange={(event) => setBusquedaMascota(event.target.value)}
+                    placeholder="Buscar mascota por nombre..."
+                  />
+                </div>
+
+                {mascotas.length === 0 ? (
+                  <EmptyState
+                    icon="fa-solid fa-paw"
+                    title="Aún no hay mascotas registradas"
+                    description="Registra el primer paciente para comenzar su seguimiento clínico."
+                  />
+                ) : mascotasFiltradas.length === 0 ? (
+                  <EmptyState
+                    icon="fa-solid fa-magnifying-glass"
+                    title="No se encontraron mascotas"
+                    description="Intenta buscar con otro nombre."
+                  />
+                ) : (
+                  <div className="module-table-wrap">
+                    <table className="module-table">
                       <thead>
                         <tr>
                           <th>Paciente</th>
@@ -188,73 +276,36 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                           <th>Nacimiento</th>
                           <th>Propietario</th>
                           <th>Receta</th>
-                          <th>Acciones</th>
+                          <th className="module-table__actions">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {mascotasFiltradas.map(m => (
+                        {mascotasFiltradas.map((mascota) => (
                           <FilaMascota
-                            key={m.id_mascota}
-                            mascota={m}
+                            key={mascota.id_mascota}
+                            mascota={mascota}
                             onEliminar={() =>
                               startTransition(() =>
-                                setMascotasEliminadas(prev => {
-                                  const next = new Set(prev)
-                                  next.add(m.id_mascota)
+                                setMascotasEliminadas((previous) => {
+                                  const next = new Set(previous)
+                                  next.add(mascota.id_mascota)
                                   return next
-                                })
+                                }),
                               )
                             }
-                            onEditarReceta={() => setMascotaEditandoReceta(m)}
+                            onEditarReceta={() => setMascotaEditandoReceta(mascota)}
                           />
                         ))}
                       </tbody>
                     </table>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </section>
             </div>
           </div>
-
-          {/* ── GUÍA DE REGISTRO ── */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="mas-guide-card">
-              <div className="mas-guide-header" style={{ background: 'linear-gradient(135deg,#0891b2,#22d3ee)' }}>
-                <i className="fa-solid fa-circle-info" /> Guía de Registro
-              </div>
-          <div className="mas-guide-body">
-                <p>Asegúrate de registrar correctamente la fecha de nacimiento. El sistema calculará automáticamente la edad del paciente para el expediente médico.</p>
-                <p>Los campos <strong>Nombre</strong>, <strong>Especie</strong> y <strong>Propietario</strong> son obligatorios.</p>
-                <p>Puedes agregar una <strong>Receta Médica</strong> inicial ahora, o gestionarla más tarde desde la lista de pacientes usando el botón <i className="fa-solid fa-notes-medical" />.</p>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: '#0891b2', fontSize: '.8rem', fontWeight: 600 }}>
-                  <i className="fa-solid fa-circle-check" style={{ marginTop: 2 }} />
-                  Los datos se guardan de forma segura con aislamiento por clínica.
-                </div>
-              </div>
-            </div>
-
-            <div className="mas-guide-card">
-              <div className="mas-guide-header" style={{ background: 'linear-gradient(135deg,#010b2f,#001f73)' }}>
-                <i className="fa-solid fa-chart-pie" /> Resumen
-              </div>
-              <div className="mas-guide-body">
-                {[
-                  { val: mascotas.length, label: 'Pacientes en esta clínica' },
-                  { val: mascotas.filter(m => m.especie === 'Perro').length, label: 'Perros' },
-                  { val: mascotas.filter(m => m.especie === 'Gato').length,  label: 'Gatos'  },
-                ].map(({ val, label }) => (
-                  <div key={label} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #f1f5f9' }}>
-                    <strong style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', display: 'block' }}>{val}</strong>
-                    <span style={{ fontSize: '.75rem', color: '#64748b' }}>{label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
         </div>
       </div>
 
-      {/* MODAL EDITAR RECETA */}
       {mascotaEditandoReceta && (
         <ModalReceta
           mascota={mascotaEditandoReceta}
@@ -265,186 +316,114 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
           }}
         />
       )}
-
-      <style>{`
-        .mas-card {
-          background: white;
-          border-radius: 16px;
-          border: 1px solid #e2e8f0;
-          padding: 28px;
-          font-family: 'Poppins', sans-serif;
-        }
-        .mas-form-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-        .mas-field { display: flex; flex-direction: column; gap: 6px; }
-        .mas-field label { font-size: .72rem; font-weight: 700; letter-spacing: .06em; color: #64748b; }
-        .mas-field input, .mas-field select {
-          padding: 12px 14px;
-          border: 1.5px solid #e2e8f0;
-          border-radius: 10px;
-          font-family: 'Poppins', sans-serif;
-          font-size: .88rem;
-          color: #0f172a;
-          background: #f8fafc;
-          outline: none;
-          width: 100%;
-        }
-        .mas-field input:focus, .mas-field select:focus { border-color: #22d3ee; background: #fff; }
-        .mas-field input:disabled, .mas-field select:disabled { opacity: .6; }
-        .mas-btn-primary {
-          display: inline-flex; align-items: center; gap: 8px;
-          background: #22d3ee; color: #0c1526;
-          border: none; padding: 13px 28px; border-radius: 12px;
-          font-family: 'Poppins', sans-serif; font-weight: 700; font-size: .9rem;
-          cursor: pointer;
-        }
-        .mas-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-        .mas-alert {
-          display: flex; align-items: center; gap: 8px;
-          padding: 12px 14px; border-radius: 10px; font-size: .85rem; margin-bottom: 20px;
-        }
-        .mas-alert-error  { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
-        .mas-alert-success { background: #f0fdf4; border: 1px solid #86efac; color: #16a34a; }
-        .mas-search {
-          display: flex; align-items: center; gap: 10px;
-          padding: 12px 14px; margin-bottom: 16px;
-          border: 1.5px solid #e2e8f0; border-radius: 10px;
-          background: #f8fafc; color: #94a3b8;
-        }
-        .mas-search:focus-within { border-color: #22d3ee; background: #fff; }
-        .mas-search input {
-          border: none; outline: none; background: transparent;
-          width: 100%; font-family: 'Poppins', sans-serif;
-          font-size: .88rem; color: #0f172a;
-        }
-        .mas-search input::placeholder { color: #94a3b8; }
-        .mas-table { width: 100%; border-collapse: collapse; font-size: .85rem; font-family: 'Poppins', sans-serif; }
-        .mas-table th {
-          padding: 12px 16px; text-align: left; background: #f8fafc;
-          color: #64748b; font-size: .72rem; font-weight: 700;
-          text-transform: uppercase; letter-spacing: .05em;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .mas-table td { padding: 13px 16px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
-        .mas-table tr:last-child td { border-bottom: none; }
-        .mas-especie-pill {
-          display: inline-flex; align-items: center; gap: 5px;
-          background: rgba(34,211,238,.1); color: #0891b2;
-          font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 99px;
-        }
-        .mas-guide-card { border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; }
-        .mas-guide-header {
-          color: white; padding: 14px 18px; font-weight: 700; font-size: .9rem;
-          display: flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif;
-        }
-        .mas-guide-body {
-          background: white; padding: 18px;
-          display: flex; flex-direction: column; gap: 12px;
-          font-family: 'Poppins', sans-serif;
-        }
-        .mas-guide-body p { font-size: .82rem; color: #475569; line-height: 1.6; }
-        .mas-section-title {
-          display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
-        }
-        .mas-section-bar { width: 4px; height: 22px; border-radius: 4px; background: #22d3ee; flex-shrink: 0; }
-        .mas-section-title h2 { font-size: 1rem; font-weight: 600; color: #0f172a; margin: 0; }
-        
-        .mas-modal-overlay {
-          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(15, 23, 42, 0.4);
-          backdrop-filter: blur(4px);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 9999;
-        }
-        .mas-modal {
-          background: white; border-radius: 20px; width: 100%; max-width: 500px;
-          padding: 32px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
-          animation: mas-modal-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes mas-modal-in {
-          0% { opacity: 0; transform: scale(0.95) translateY(10px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .mas-btn-secondary {
-          padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: .85rem;
-          color: #475569; background: #f1f5f9; border: none; cursor: pointer;
-        }
-
-        @media (max-width: 900px) {
-          .mas-form-grid { grid-template-columns: 1fr; }
-        }
-      `}</style>
     </DashboardShell>
   )
 }
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <div className="mas-section-title">
-      <span className="mas-section-bar" />
+    <div className="module-section-title">
       <h2>{title}</h2>
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="mas-field">
+    <div className="module-field">
       <label>{label}</label>
       {children}
     </div>
   )
 }
 
-function FilaMascota({ mascota, onEliminar, onEditarReceta }: { mascota: MascotaConDueno; onEliminar: () => void; onEditarReceta: () => void }) {
+function EmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: string
+  title: string
+  description: string
+}) {
+  return (
+    <div className="module-empty">
+      <i className={icon} />
+      <h3>{title}</h3>
+      <p>{description}</p>
+    </div>
+  )
+}
+
+function FilaMascota({
+  mascota,
+  onEliminar,
+  onEditarReceta,
+}: {
+  mascota: MascotaConDueno
+  onEliminar: () => void
+  onEditarReceta: () => void
+}) {
   const [, formActionEliminar, pendingEliminar] = useActionState<MascotaState, FormData>(
-    async (prev, formData) => {
-      const result = await eliminarMascotaAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await eliminarMascotaAction(previousState, formData)
       if (result?.success) onEliminar()
       return result
     },
-    null
+    null,
   )
 
   return (
     <tr>
-      <td><strong>{mascota.nombre}</strong></td>
       <td>
-        <span className="mas-especie-pill">
-          <i className="fa-solid fa-paw" /> {mascota.especie}
-        </span>
-        {mascota.raza && <span style={{ color: '#64748b', fontSize: '.78rem', marginLeft: 6 }}>{mascota.raza}</span>}
+        <div className="module-patient">
+          <span className="module-patient__avatar">
+            <i className="fa-solid fa-paw" />
+          </span>
+          <span className="module-patient__details">
+            <strong>{mascota.nombre}</strong>
+            <span>Paciente #{mascota.id_mascota}</span>
+          </span>
+        </div>
       </td>
-      <td style={{ color: '#64748b', fontSize: '.82rem' }}>{formatearFecha(mascota.fecha_nacimiento)}</td>
-      <td style={{ fontSize: '.85rem' }}>{mascota.dueno?.nombre ?? '—'}</td>
       <td>
-        <button onClick={onEditarReceta} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span className="module-pill">{mascota.especie}</span>
+        {mascota.raza && <span> · {mascota.raza}</span>}
+      </td>
+      <td>{formatearFecha(mascota.fecha_nacimiento)}</td>
+      <td>{mascota.dueno?.nombre ?? '—'}</td>
+      <td>
+        <button type="button" className="module-action is-success" onClick={onEditarReceta}>
           <i className="fa-solid fa-notes-medical" />
           Receta
         </button>
       </td>
-      <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <td className="module-table__actions">
+        <div className="module-action-group">
           <Link
             href={`/expedientes?idMascota=${mascota.id_mascota}`}
-            style={{ background: '#eef2ff', color: '#1d4ed8', border: '1px solid #c7d2fe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }}
+            className="module-action"
           >
             <i className="fa-solid fa-clock-rotate-left" />
             Historial
           </Link>
-          <Link
-            href={`/vacunas?idMascota=${mascota.id_mascota}`}
-            style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 12px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', textDecoration: 'none' }}
-          >
+          <Link href={`/vacunas?idMascota=${mascota.id_mascota}`} className="module-action">
             <i className="fa-solid fa-syringe" />
             Vacunas
           </Link>
-          <form action={formActionEliminar} onSubmit={e => { if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) e.preventDefault() }}>
+          <form
+            action={formActionEliminar}
+            onSubmit={(event) => {
+              if (!confirm(`¿Eliminar a "${mascota.nombre}"?`)) event.preventDefault()
+            }}
+          >
             <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
-            <button type="submit" disabled={pendingEliminar} style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem', padding: 4 }}>
+            <button
+              type="submit"
+              disabled={pendingEliminar}
+              className="module-action is-danger"
+              title="Eliminar paciente"
+            >
               <i className="fa-solid fa-trash" />
             </button>
           </form>
@@ -454,58 +433,92 @@ function FilaMascota({ mascota, onEliminar, onEditarReceta }: { mascota: Mascota
   )
 }
 
-function ModalReceta({ mascota, onClose, onSaved }: { mascota: MascotaConDueno; onClose: () => void; onSaved: () => void }) {
+function ModalReceta({
+  mascota,
+  onClose,
+  onSaved,
+}: {
+  mascota: MascotaConDueno
+  onClose: () => void
+  onSaved: () => void
+}) {
   const [recetaState, formActionReceta, pendingReceta] = useActionState<MascotaState, FormData>(
-    async (prev, formData) => {
-      const result = await actualizarRecetaAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await actualizarRecetaAction(previousState, formData)
       if (result?.success) onSaved()
       return result
     },
-    null
+    null,
   )
 
   return (
-    <div className="mas-modal-overlay">
-      <div className="mas-modal">
-        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <i className="fa-solid fa-prescription" style={{ color: '#0891b2' }} />
+    <div className="module-modal-overlay">
+      <div className="module-modal">
+        <h2 className="module-modal__title">
+          <i className="fa-solid fa-prescription" />
           Receta Médica
         </h2>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '.9rem', marginBottom: 24 }}>
+        <p className="module-modal__subtitle">
           Paciente: <strong>{mascota.nombre}</strong>
         </p>
 
         <form action={formActionReceta}>
           {recetaState?.error && (
-            <div className="mas-alert mas-alert-error" style={{ marginBottom: 16 }}>
-              <i className="fa-solid fa-circle-exclamation" /> {recetaState.error}
+            <div className="module-alert is-error">
+              <i className="fa-solid fa-circle-exclamation" />
+              {recetaState.error}
             </div>
           )}
-          
+
           <input type="hidden" name="id_mascota" value={mascota.id_mascota} />
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <Field label="MEDICAMENTO">
-              <input name="medicamento" type="text" defaultValue={mascota.medicamento ?? ''} disabled={pendingReceta} />
+
+          <div className="module-stack">
+            <Field label="Medicamento">
+              <input
+                name="medicamento"
+                type="text"
+                defaultValue={mascota.medicamento ?? ''}
+                disabled={pendingReceta}
+              />
             </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <Field label="DOSIS">
-                <input name="dosis" type="text" defaultValue={mascota.dosis ?? ''} disabled={pendingReceta} />
+            <div className="module-form-grid">
+              <Field label="Dosis">
+                <input
+                  name="dosis"
+                  type="text"
+                  defaultValue={mascota.dosis ?? ''}
+                  disabled={pendingReceta}
+                />
               </Field>
-              <Field label="FRECUENCIA">
-                <input name="frecuencia" type="text" defaultValue={mascota.frecuencia ?? ''} disabled={pendingReceta} />
+              <Field label="Frecuencia">
+                <input
+                  name="frecuencia"
+                  type="text"
+                  defaultValue={mascota.frecuencia ?? ''}
+                  disabled={pendingReceta}
+                />
               </Field>
             </div>
-            <Field label="DURACIÓN">
-              <input name="duracion" type="text" defaultValue={mascota.duracion ?? ''} disabled={pendingReceta} />
+            <Field label="Duración">
+              <input
+                name="duracion"
+                type="text"
+                defaultValue={mascota.duracion ?? ''}
+                disabled={pendingReceta}
+              />
             </Field>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 28 }}>
-            <button type="button" className="mas-btn-secondary" onClick={onClose} disabled={pendingReceta}>
+          <div className="module-form-actions">
+            <button
+              type="button"
+              className="module-button is-secondary"
+              onClick={onClose}
+              disabled={pendingReceta}
+            >
               Cancelar
             </button>
-            <button type="submit" className="mas-btn-primary" disabled={pendingReceta} style={{ padding: '10px 20px' }}>
+            <button type="submit" className="module-button is-primary" disabled={pendingReceta}>
               {pendingReceta ? 'Guardando...' : 'Guardar Receta'}
             </button>
           </div>

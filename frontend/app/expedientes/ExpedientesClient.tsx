@@ -1,11 +1,19 @@
 'use client'
 
-import { useActionState, useState, useMemo } from 'react'
+import { useActionState, useMemo, useState } from 'react'
 import DashboardShell from '@/app/components/DashboardShell'
-import { registrarExpedienteAction, eliminarExpedienteAction } from '@/app/actions/expedientes'
-import type { ExpedienteState, ExpedienteConMascota, PerfilUsuario } from '@/app/actions/expedientes'
+import { eliminarExpedienteAction, registrarExpedienteAction } from '@/app/actions/expedientes'
+import type {
+  ExpedienteConMascota,
+  ExpedienteState,
+  PerfilUsuario,
+} from '@/app/actions/expedientes'
 
-type Mascota = { id_mascota: number; nombre: string; especie: string }
+type Mascota = {
+  id_mascota: number
+  nombre: string
+  especie: string
+}
 
 type Props = {
   perfil: PerfilUsuario
@@ -14,201 +22,373 @@ type Props = {
 }
 
 function formatearFecha(fecha: string) {
-  const [y, m, d] = fecha.split('-')
-  return `${d}/${m}/${y}`
+  const [year, month, day] = fecha.split('-')
+  return `${day}/${month}/${year}`
 }
 
-export default function ExpedientesClient({ perfil, expedientesIniciales, mascotas }: Props) {
+export default function ExpedientesClient({
+  perfil,
+  expedientesIniciales,
+  mascotas,
+}: Props) {
   const [expedientes, setExpedientes] = useState(expedientesIniciales)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [formKey, setFormKey] = useState(0)
 
   const [altaState, altaAction, altaPending] = useActionState<ExpedienteState, FormData>(
-    async (prev, formData) => {
-      const result = await registrarExpedienteAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await registrarExpedienteAction(previousState, formData)
       if (result?.success) {
         setMostrarForm(false)
-        setFormKey(k => k + 1)
-        // Recargar expedientes desde el servidor no es necesario en dev
-        // revalidatePath se encarga al navegar
+        setFormKey((key) => key + 1)
       }
       return result
     },
-    null
+    null,
   )
 
   const expedientesFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    if (!q) return expedientes
-    return expedientes.filter(e =>
-      e.diagnostico.toLowerCase().includes(q) ||
-      e.mascota?.nombre.toLowerCase().includes(q)
+    const query = busqueda.trim().toLowerCase()
+    if (!query) return expedientes
+    return expedientes.filter(
+      (expediente) =>
+        expediente.diagnostico.toLowerCase().includes(query) ||
+        expediente.mascota?.nombre.toLowerCase().includes(query),
     )
   }, [expedientes, busqueda])
 
   const esAdmin = perfil.rol === 'Administrador'
+  const resumen = [
+    {
+      value: expedientes.length,
+      label: 'Consultas registradas',
+      icon: 'fa-solid fa-notes-medical',
+      tone: '',
+    },
+    {
+      value: new Set(
+        expedientes
+          .map((expediente) => expediente.id_mascota)
+          .filter((id): id is number => id !== null),
+      ).size,
+      label: 'Pacientes atendidos',
+      icon: 'fa-solid fa-paw',
+      tone: 'is-info',
+    },
+    {
+      value: expedientes.filter((expediente) => expediente.tratamiento?.trim()).length,
+      label: 'Con tratamiento indicado',
+      icon: 'fa-solid fa-prescription-bottle-medical',
+      tone: 'is-success',
+    },
+  ]
 
   return (
     <DashboardShell perfil={perfil}>
-      <div style={{ padding: '40px', maxWidth: '1100px', margin: '0 auto', fontFamily: "'Poppins', sans-serif" }}>
-
-        {/* Título */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '28px' }}>
-          <div>
-            <h1 style={{ fontSize: '1.7rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>
-              <i className="fa-solid fa-notes-medical" style={{ color: '#22d3ee', marginRight: '10px' }} />
-              Expedientes Médicos
-            </h1>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
-              Historial clínico de los pacientes de tu clínica
-            </p>
-          </div>
-          <button
-            onClick={() => setMostrarForm(v => !v)}
-            style={{ background: '#001f73', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '12px', fontFamily: "'Poppins', sans-serif", fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            <i className="fa-solid fa-plus" /> Nueva Consulta
-          </button>
-        </div>
-
-        {/* Formulario de alta */}
-        {mostrarForm && (
-          <form key={formKey} action={altaAction} style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', marginBottom: '24px' }}>
-            <h3 style={{ color: '#0f172a', margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700 }}>
-              <i className="fa-solid fa-file-medical" style={{ color: '#22d3ee', marginRight: '8px' }} />
-              Registrar nueva consulta
-            </h3>
-
-            {altaState?.error && (
-              <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', padding: '12px 14px', borderRadius: '10px', marginBottom: '16px', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <i className="fa-solid fa-circle-exclamation" /> {altaState.error}
+      <div className="module-page">
+        <div className="module-container is-wide">
+          <header className="module-header">
+            <div className="module-header__identity">
+              <span className="module-header__icon">
+                <i className="fa-solid fa-notes-medical" />
+              </span>
+              <div>
+                <span className="module-eyebrow">Historial clínico</span>
+                <h1 className="module-title">Expedientes Médicos</h1>
+                <p className="module-subtitle">
+                  Consulta diagnósticos y tratamientos anteriores de cada paciente.
+                </p>
               </div>
+            </div>
+            <div className="module-header__actions">
+              <button
+                type="button"
+                className="module-button is-primary"
+                onClick={() => setMostrarForm((visible) => !visible)}
+                aria-expanded={mostrarForm}
+                aria-controls="nuevo-expediente"
+              >
+                <i className={`fa-solid ${mostrarForm ? 'fa-xmark' : 'fa-plus'}`} />
+                {mostrarForm ? 'Cerrar formulario' : 'Nueva Consulta'}
+              </button>
+            </div>
+          </header>
+
+          <section className="module-overview" aria-label="Resumen de expedientes">
+            {resumen.map((item) => (
+              <div
+                key={item.label}
+                className={`module-overview__item${item.tone ? ` ${item.tone}` : ''}`}
+              >
+                <span className="module-overview__icon" aria-hidden="true">
+                  <i className={item.icon} />
+                </span>
+                <span className="module-overview__content">
+                  <strong className="module-overview__value">{item.value}</strong>
+                  <span className="module-overview__label">{item.label}</span>
+                </span>
+              </div>
+            ))}
+          </section>
+
+          <div className="module-workspace">
+            {mostrarForm && (
+              <section
+                id="nuevo-expediente"
+                className="module-workspace__section"
+                aria-labelledby="nuevo-expediente-title"
+              >
+                <div className="module-workspace__header">
+                  <div>
+                    <h2 id="nuevo-expediente-title" className="module-workspace__title">
+                      <i className="fa-solid fa-file-medical" aria-hidden="true" />
+                      Registrar nueva consulta
+                    </h2>
+                    <p className="module-subtitle">
+                      Documenta el diagnóstico y las indicaciones clínicas del paciente.
+                    </p>
+                  </div>
+                  <span className="module-workspace__step">Nuevo registro</span>
+                </div>
+
+                <form key={formKey} action={altaAction}>
+                  {altaState?.error && (
+                    <div className="module-alert is-error">
+                      <i className="fa-solid fa-circle-exclamation" />
+                      {altaState.error}
+                    </div>
+                  )}
+
+                  <div className="module-inline-note">
+                    <i className="fa-solid fa-circle-info" aria-hidden="true" />
+                    <span>
+                      Paciente y diagnóstico son obligatorios. El tratamiento puede registrarse
+                      ahora o quedar pendiente según la valoración médica.
+                    </span>
+                  </div>
+
+                  <div className="module-form-grid is-three">
+                    <div className="module-field">
+                      <label htmlFor="expediente-mascota">Paciente *</label>
+                      <select
+                        id="expediente-mascota"
+                        name="id_mascota"
+                        required
+                        disabled={altaPending}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Seleccionar mascota...</option>
+                        {mascotas.map((mascota) => (
+                          <option key={mascota.id_mascota} value={mascota.id_mascota}>
+                            {mascota.nombre} ({mascota.especie})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="module-field">
+                      <label htmlFor="diagnostico">Diagnóstico *</label>
+                      <input
+                        id="diagnostico"
+                        name="diagnostico"
+                        type="text"
+                        required
+                        placeholder="Ej. Gastroenteritis leve"
+                        disabled={altaPending}
+                      />
+                    </div>
+
+                    <div className="module-field">
+                      <label htmlFor="tratamiento">Tratamiento</label>
+                      <input
+                        id="tratamiento"
+                        name="tratamiento"
+                        type="text"
+                        placeholder="Ej. Amoxicilina 250 mg cada 8 h"
+                        disabled={altaPending}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="module-form-actions">
+                    <button
+                      type="button"
+                      className="module-button is-secondary"
+                      onClick={() => setMostrarForm(false)}
+                      disabled={altaPending}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="module-button is-primary"
+                      disabled={altaPending}
+                    >
+                      {altaPending ? (
+                        <>
+                          <i className="fa-solid fa-circle-notch fa-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-floppy-disk" />
+                          Guardar consulta
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </section>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Paciente *</label>
-                <select name="id_mascota" required disabled={altaPending}
-                  style={{ padding: '11px 14px', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontFamily: "'Poppins', sans-serif", fontSize: '0.9rem', background: '#f8fafc', outline: 'none' }}>
-                  <option value="">Seleccionar mascota...</option>
-                  {mascotas.map(m => (
-                    <option key={m.id_mascota} value={m.id_mascota}>{m.nombre} ({m.especie})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Diagnóstico *</label>
-                <input name="diagnostico" type="text" required placeholder="Ej. Gastroenteritis leve" disabled={altaPending}
-                  style={{ padding: '11px 14px', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontFamily: "'Poppins', sans-serif", fontSize: '0.9rem', background: '#f8fafc', outline: 'none' }} />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Tratamiento</label>
-                <input name="tratamiento" type="text" placeholder="Ej. Amoxicilina 250mg cada 8h" disabled={altaPending}
-                  style={{ padding: '11px 14px', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontFamily: "'Poppins', sans-serif", fontSize: '0.9rem', background: '#f8fafc', outline: 'none' }} />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" onClick={() => setMostrarForm(false)} disabled={altaPending}
-                style={{ background: 'transparent', border: '1.5px solid #e2e8f0', color: '#64748b', padding: '10px 18px', borderRadius: '10px', fontFamily: "'Poppins', sans-serif", fontWeight: 500, cursor: 'pointer' }}>
-                Cancelar
-              </button>
-              <button type="submit" disabled={altaPending}
-                style={{ background: '#001f73', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontFamily: "'Poppins', sans-serif", fontWeight: 600, cursor: altaPending ? 'not-allowed' : 'pointer', opacity: altaPending ? 0.65 : 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {altaPending ? <><i className="fa-solid fa-circle-notch fa-spin" /> Guardando...</> : <><i className="fa-solid fa-floppy-disk" /> Guardar consulta</>}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Buscador */}
-        <div style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', maxWidth: '360px' }}>
-          <i className="fa-solid fa-magnifying-glass" style={{ color: '#94a3b8' }} />
-          <input type="text" placeholder="Buscar por diagnóstico o mascota..." value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            style={{ border: 'none', outline: 'none', fontFamily: "'Poppins', sans-serif", fontSize: '0.9rem', width: '100%', background: 'transparent' }} />
-        </div>
-
-        {/* Tabla */}
-        <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          {expedientesFiltrados.length === 0 ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: '#94a3b8' }}>
-              <i className="fa-solid fa-notes-medical" style={{ fontSize: '2.5rem', display: 'block', marginBottom: '12px' }} />
-              <p style={{ margin: 0 }}>{expedientes.length === 0 ? 'Aún no hay expedientes registrados.' : 'No se encontraron resultados.'}</p>
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {['Fecha', 'Paciente', 'Diagnóstico', 'Tratamiento', ...(esAdmin ? [''] : [])].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '14px 18px', background: '#f8fafc', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e2e8f0' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {expedientesFiltrados.map(exp => (
-                  <FilaExpediente
-                    key={exp.id_expediente}
-                    exp={exp}
-                    esAdmin={esAdmin}
-                    onEliminar={() => setExpedientes(prev => prev.filter(e => e.id_expediente !== exp.id_expediente))}
+            <section
+              className="module-workspace__section"
+              aria-labelledby="historial-expedientes-title"
+            >
+              <div className="module-workspace__header">
+                <div>
+                  <h2 id="historial-expedientes-title" className="module-workspace__title">
+                    <i className="fa-solid fa-clock-rotate-left" aria-hidden="true" />
+                    Historial clínico
+                    <span className="module-count">{expedientes.length}</span>
+                  </h2>
+                  <p className="module-subtitle">
+                    Consulta diagnósticos, tratamientos y pacientes atendidos.
+                  </p>
+                </div>
+                <div className="module-search">
+                  <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                  <input
+                    type="search"
+                    placeholder="Buscar por diagnóstico o mascota..."
+                    value={busqueda}
+                    onChange={(event) => setBusqueda(event.target.value)}
+                    aria-label="Buscar por diagnóstico o mascota"
                   />
-                ))}
-              </tbody>
-            </table>
-          )}
+                </div>
+              </div>
+
+              {expedientesFiltrados.length === 0 ? (
+                <div className="module-empty">
+                  <i className="fa-solid fa-notes-medical" />
+                  <h3>
+                    {expedientes.length === 0
+                      ? 'Aún no hay expedientes registrados'
+                      : 'No se encontraron resultados'}
+                  </h3>
+                  <p>
+                    {expedientes.length === 0
+                      ? 'Registra la primera consulta para construir el historial del paciente.'
+                      : 'Prueba con otro diagnóstico o nombre de mascota.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="module-table-wrap">
+                  <table className="module-table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Paciente</th>
+                        <th>Diagnóstico</th>
+                        <th>Tratamiento</th>
+                        {esAdmin && <th className="module-table__actions">Acciones</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expedientesFiltrados.map((expediente) => (
+                        <FilaExpediente
+                          key={expediente.id_expediente}
+                          expediente={expediente}
+                          esAdmin={esAdmin}
+                          onEliminar={() =>
+                            setExpedientes((previous) =>
+                              previous.filter(
+                                (item) => item.id_expediente !== expediente.id_expediente,
+                              ),
+                            )
+                          }
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       </div>
     </DashboardShell>
   )
 }
 
-function FilaExpediente({ exp, esAdmin, onEliminar }: {
-  exp: ExpedienteConMascota
+function FilaExpediente({
+  expediente,
+  esAdmin,
+  onEliminar,
+}: {
+  expediente: ExpedienteConMascota
   esAdmin: boolean
   onEliminar: () => void
 }) {
-  const [elimState, elimAction, elimPending] = useActionState<ExpedienteState, FormData>(
-    async (prev, formData) => {
-      const result = await eliminarExpedienteAction(prev, formData)
+  const [eliminarState, eliminarAction, eliminarPending] = useActionState<
+    ExpedienteState,
+    FormData
+  >(
+    async (previousState, formData) => {
+      const result = await eliminarExpedienteAction(previousState, formData)
       if (result?.success) onEliminar()
       return result
     },
-    null
+    null,
   )
 
-  const tdStyle = { padding: '14px 18px', borderBottom: '1px solid #f1f5f9', fontSize: '0.875rem', color: '#0f172a', verticalAlign: 'middle' as const }
-
   return (
-    <tr style={{ transition: 'background 0.15s' }}
-      onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
-      onMouseLeave={e => (e.currentTarget.style.background = '')}>
-      <td style={{ ...tdStyle, whiteSpace: 'nowrap' as const }}>{formatearFecha(exp.fecha_consulta)}</td>
-      <td style={tdStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="fa-solid fa-paw" style={{ color: '#22d3ee', fontSize: '0.8rem' }} />
-          <strong>{exp.mascota?.nombre ?? '—'}</strong>
-          {exp.mascota && <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>({exp.mascota.especie})</span>}
+    <tr>
+      <td>{formatearFecha(expediente.fecha_consulta)}</td>
+      <td>
+        <div className="module-patient">
+          <span className="module-patient__avatar">
+            <i className="fa-solid fa-paw" />
+          </span>
+          <span className="module-patient__details">
+            <strong>{expediente.mascota?.nombre ?? 'Sin paciente'}</strong>
+            <span>{expediente.mascota?.especie ?? 'Sin especie'}</span>
+          </span>
         </div>
       </td>
-      <td style={tdStyle}>{exp.diagnostico}</td>
-      <td style={{ ...tdStyle, color: '#475569' }}>{exp.tratamiento ?? '—'}</td>
+      <td><strong>{expediente.diagnostico}</strong></td>
+      <td>{expediente.tratamiento ?? '—'}</td>
       {esAdmin && (
-        <td style={{ ...tdStyle, textAlign: 'right' as const }}>
-          <form action={elimAction}
-            onSubmit={e => { if (!confirm(`¿Eliminar el expediente del ${formatearFecha(exp.fecha_consulta)}?`)) e.preventDefault() }}>
-            <input type="hidden" name="id_expediente" value={exp.id_expediente} />
-            <button type="submit" disabled={elimPending} title="Eliminar expediente"
-              style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '0.95rem', padding: '6px' }}>
+        <td className="module-table__actions">
+          <form
+            action={eliminarAction}
+            onSubmit={(event) => {
+              if (
+                !confirm(
+                  `¿Eliminar el expediente del ${formatearFecha(expediente.fecha_consulta)}?`,
+                )
+              ) {
+                event.preventDefault()
+              }
+            }}
+          >
+            <input
+              type="hidden"
+              name="id_expediente"
+              value={expediente.id_expediente}
+            />
+            <button
+              type="submit"
+              disabled={eliminarPending}
+              className="module-action is-danger"
+              title="Eliminar expediente"
+            >
               <i className="fa-solid fa-trash" />
             </button>
           </form>
-          {elimState?.error && (
-            <div style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '4px' }}>{elimState.error}</div>
+          {eliminarState?.error && (
+            <small className="module-field-error">{eliminarState.error}</small>
           )}
         </td>
       )}

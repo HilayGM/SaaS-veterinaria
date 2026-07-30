@@ -1,14 +1,18 @@
 'use client'
 
-import { useActionState, useMemo, useState, useTransition, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
+import { useActionState, useMemo, useState, useTransition } from 'react'
+import DashboardShell from '@/app/components/DashboardShell'
 import {
   agregarProductoAction,
   ajustarStockAction,
   eliminarProductoAction,
 } from '@/app/actions/inventario'
-import type { InventarioState, PerfilUsuario, ProductoInventario } from '@/app/actions/inventario'
-import DashboardShell from '@/app/components/DashboardShell'
+import type {
+  InventarioState,
+  PerfilUsuario,
+  ProductoInventario,
+} from '@/app/actions/inventario'
 
 type Props = {
   perfil: PerfilUsuario
@@ -21,17 +25,17 @@ function estadoCaducidad(fecha: string | null): 'sin-fecha' | 'vencido' | 'por-v
   if (!fecha) return 'sin-fecha'
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
-  const fechaCad = new Date(fecha + 'T00:00:00')
-  const diffDias = Math.floor((fechaCad.getTime() - hoy.getTime()) / 86_400_000)
-  if (diffDias < 0) return 'vencido'
-  if (diffDias <= DIAS_ALERTA_CADUCIDAD) return 'por-vencer'
+  const fechaCaducidad = new Date(`${fecha}T00:00:00`)
+  const diferencia = Math.floor((fechaCaducidad.getTime() - hoy.getTime()) / 86_400_000)
+  if (diferencia < 0) return 'vencido'
+  if (diferencia <= DIAS_ALERTA_CADUCIDAD) return 'por-vencer'
   return 'ok'
 }
 
 function formatearFecha(fecha: string | null) {
-  if (!fecha) return '— Sin fecha —'
-  const [y, m, d] = fecha.split('-')
-  return `${d}/${m}/${y}`
+  if (!fecha) return 'Sin fecha'
+  const [year, month, day] = fecha.split('-')
+  return `${day}/${month}/${year}`
 }
 
 export default function InventarioClient({ perfil, productosIniciales }: Props) {
@@ -42,222 +46,289 @@ export default function InventarioClient({ perfil, productosIniciales }: Props) 
   const [, startTransition] = useTransition()
 
   const [altaState, altaFormAction, altaPending] = useActionState<InventarioState, FormData>(
-    async (prev, formData) => {
-      const result = await agregarProductoAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await agregarProductoAction(previousState, formData)
       if (result?.success) {
         setMostrarFormAlta(false)
-        startTransition(() => {
-          router.refresh()
-        })
+        startTransition(() => router.refresh())
       }
       return result
     },
-    null
+    null,
   )
 
-  const productos = useMemo(() => (
-    productosIniciales
-      .map(producto => (
-        Object.prototype.hasOwnProperty.call(productosLocales, producto.id_producto)
-          ? productosLocales[producto.id_producto]
-          : producto
-      ))
-      .filter((producto): producto is ProductoInventario => producto !== null)
-  ), [productosIniciales, productosLocales])
+  const productos = useMemo(
+    () =>
+      productosIniciales
+        .map((producto) =>
+          Object.prototype.hasOwnProperty.call(productosLocales, producto.id_producto)
+            ? productosLocales[producto.id_producto]
+            : producto,
+        )
+        .filter((producto): producto is ProductoInventario => producto !== null),
+    [productosIniciales, productosLocales],
+  )
 
   const productosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
-    if (!q) return productos
-    return productos.filter(p => p.nombre.toLowerCase().includes(q))
+    const query = busqueda.trim().toLowerCase()
+    if (!query) return productos
+    return productos.filter((producto) => producto.nombre.toLowerCase().includes(query))
   }, [productos, busqueda])
 
-  const vencidos = productos.filter(p => estadoCaducidad(p.fecha_caducidad) === 'vencido').length
-  const porVencer = productos.filter(p => estadoCaducidad(p.fecha_caducidad) === 'por-vencer').length
+  const vencidos = productos.filter(
+    (producto) => estadoCaducidad(producto.fecha_caducidad) === 'vencido',
+  ).length
+  const porVencer = productos.filter(
+    (producto) => estadoCaducidad(producto.fecha_caducidad) === 'por-vencer',
+  ).length
+  const resumen = [
+    {
+      value: productos.length,
+      label: 'Productos registrados',
+      icon: 'fa-solid fa-pills',
+      variant: '',
+    },
+    {
+      value: porVencer,
+      label: `Por caducar (≤ ${DIAS_ALERTA_CADUCIDAD} días)`,
+      icon: 'fa-solid fa-triangle-exclamation',
+      variant: 'is-warning',
+    },
+    {
+      value: vencidos,
+      label: 'Productos caducados',
+      icon: 'fa-solid fa-skull-crossbones',
+      variant: 'is-danger',
+    },
+  ]
 
   return (
     <DashboardShell perfil={perfil}>
-      <div className="inv-page">
-        <main className="inv-main">
-          <div className="inv-title-row">
-            <div>
-              <h1>Inventario de medicamentos</h1>
-              <p>Controla el stock y las fechas de caducidad de tu clínica.</p>
+      <div className="module-page">
+        <div className="module-container is-wide">
+          <header className="module-header">
+            <div className="module-header__identity">
+              <span className="module-header__icon">
+                <i className="fa-solid fa-boxes-stacked" />
+              </span>
+              <div>
+                <span className="module-eyebrow">Existencias y caducidad</span>
+                <h1 className="module-title">Control de Inventario</h1>
+                <p className="module-subtitle">
+                  Supervisa el stock y anticipa las fechas de caducidad de los medicamentos.
+                </p>
+              </div>
             </div>
-            <button
-              type="button"
-              className="inv-btn-primary"
-              onClick={() => setMostrarFormAlta(v => !v)}
+            <div className="module-header__actions">
+              <button
+                type="button"
+                className="module-button is-primary"
+                onClick={() => setMostrarFormAlta((visible) => !visible)}
+              >
+                <i className={`fa-solid ${mostrarFormAlta ? 'fa-xmark' : 'fa-plus'}`} />
+                {mostrarFormAlta ? 'Cerrar formulario' : 'Agregar producto'}
+              </button>
+            </div>
+          </header>
+
+          <section className="module-overview" aria-label="Resumen de inventario">
+            {resumen.map((item) => (
+              <div
+                key={item.label}
+                className={`module-overview__item ${item.variant}`.trim()}
+              >
+                <span className="module-overview__icon" aria-hidden="true">
+                  <i className={item.icon} />
+                </span>
+                <span className="module-overview__content">
+                  <strong className="module-overview__value">{item.value}</strong>
+                  <span className="module-overview__label">{item.label}</span>
+                </span>
+              </div>
+            ))}
+          </section>
+
+          <div className="module-workspace">
+            {mostrarFormAlta && (
+              <section
+                className="module-workspace__section"
+                aria-labelledby="nuevo-producto-title"
+              >
+                <div className="module-workspace__header">
+                  <div>
+                    <h2 id="nuevo-producto-title" className="module-workspace__title">
+                      <i className="fa-solid fa-capsules" aria-hidden="true" />
+                      Nuevo producto
+                    </h2>
+                    <p className="module-subtitle">
+                      Registra el medicamento, sus existencias y la fecha de caducidad.
+                    </p>
+                  </div>
+                </div>
+
+                <form action={altaFormAction}>
+                  {altaState?.error && (
+                    <div className="module-alert is-error">
+                      <i className="fa-solid fa-circle-exclamation" />
+                      {altaState.error}
+                    </div>
+                  )}
+
+                  <input type="hidden" name="id_clinica" value={perfil.id_clinica ?? ''} />
+
+                  <div className="module-inline-note">
+                    <i className="fa-solid fa-circle-info" aria-hidden="true" />
+                    <span>
+                      El nombre y la cantidad son obligatorios. Agrega una fecha para recibir
+                      alertas de caducidad.
+                    </span>
+                  </div>
+
+                  <div className="module-form-grid is-three">
+                    <div className="module-field">
+                      <label htmlFor="nombre">Nombre del medicamento *</label>
+                      <input
+                        id="nombre"
+                        name="nombre"
+                        type="text"
+                        required
+                        placeholder="Ej. Amoxicilina 250 mg"
+                        disabled={altaPending}
+                      />
+                    </div>
+                    <div className="module-field">
+                      <label htmlFor="cantidad">Cantidad en stock *</label>
+                      <input
+                        id="cantidad"
+                        name="cantidad"
+                        type="number"
+                        min={0}
+                        required
+                        defaultValue={0}
+                        disabled={altaPending}
+                      />
+                    </div>
+                    <div className="module-field">
+                      <label htmlFor="fecha_caducidad">Fecha de caducidad</label>
+                      <input
+                        id="fecha_caducidad"
+                        name="fecha_caducidad"
+                        type="date"
+                        disabled={altaPending}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="module-form-actions">
+                    <button
+                      type="button"
+                      className="module-button is-secondary"
+                      onClick={() => setMostrarFormAlta(false)}
+                      disabled={altaPending}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="module-button is-primary"
+                      disabled={altaPending}
+                    >
+                      {altaPending ? (
+                        <>
+                          <i className="fa-solid fa-circle-notch fa-spin" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-floppy-disk" />
+                          Guardar producto
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            )}
+
+            <section
+              className="module-workspace__section"
+              aria-labelledby="inventario-productos-title"
             >
-              <i className="fa-solid fa-plus" /> Agregar producto
-            </button>
-          </div>
-
-          {/* ── TARJETAS RESUMEN ── */}
-          <div className="inv-stats">
-            <div className="inv-stat-card">
-              <i className="fa-solid fa-pills" />
-              <div>
-                <strong>{productos.length}</strong>
-                <span>Productos registrados</span>
+              <div className="module-workspace__header">
+                <div>
+                  <h2 id="inventario-productos-title" className="module-workspace__title">
+                    <i className="fa-solid fa-boxes-stacked" aria-hidden="true" />
+                    Inventario de medicamentos
+                    <span className="module-count">{productos.length}</span>
+                  </h2>
+                  <p className="module-subtitle">
+                    Consulta existencias, ajusta el stock y revisa las fechas de caducidad.
+                  </p>
+                </div>
+                <div className="module-search">
+                  <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+                  <input
+                    type="search"
+                    placeholder="Buscar medicamento..."
+                    value={busqueda}
+                    onChange={(event) => setBusqueda(event.target.value)}
+                    aria-label="Buscar medicamento"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="inv-stat-card inv-stat-warn">
-              <i className="fa-solid fa-triangle-exclamation" />
-              <div>
-                <strong>{porVencer}</strong>
-                <span>Por caducar (≤ {DIAS_ALERTA_CADUCIDAD} días)</span>
-              </div>
-            </div>
-            <div className="inv-stat-card inv-stat-danger">
-              <i className="fa-solid fa-skull-crossbones" />
-              <div>
-                <strong>{vencidos}</strong>
-                <span>Caducados</span>
-              </div>
-            </div>
-          </div>
 
-          {/* ── FORM ALTA DE PRODUCTO ── */}
-          {mostrarFormAlta && (
-            <form action={altaFormAction} className="inv-form-card">
-              <h3>Nuevo producto</h3>
-
-              {altaState?.error && (
-                <div className="inv-alert inv-alert-error">
-                  <i className="fa-solid fa-circle-exclamation" /> {altaState.error}
+              {productosFiltrados.length === 0 ? (
+                <div className="module-empty">
+                  <i className="fa-solid fa-box-open" />
+                  <h3>
+                    {productos.length === 0
+                      ? 'Aún no hay productos en el inventario'
+                      : 'No se encontraron productos'}
+                  </h3>
+                  <p>
+                    {productos.length === 0
+                      ? 'Agrega el primer medicamento para comenzar a controlar sus existencias.'
+                      : 'Prueba con otro nombre de medicamento.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="module-table-wrap">
+                  <table className="module-table">
+                    <thead>
+                      <tr>
+                        <th>Medicamento</th>
+                        <th>Cantidad en stock</th>
+                        <th>Fecha de caducidad</th>
+                        <th className="module-table__actions">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productosFiltrados.map((producto) => (
+                        <FilaProducto
+                          key={producto.id_producto}
+                          producto={producto}
+                          onChange={(actualizado) => {
+                            startTransition(() => {
+                              setProductosLocales((previous) => ({
+                                ...previous,
+                                [producto.id_producto]: actualizado,
+                              }))
+                            })
+                          }}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
-
-              <input type="hidden" name="id_clinica" value={perfil.id_clinica ?? ''} />
-
-              <div className="inv-form-grid">
-                <div className="inv-field">
-                  <label htmlFor="nombre">Nombre del medicamento *</label>
-                  <input id="nombre" name="nombre" type="text" required placeholder="Ej. Amoxicilina 250mg" disabled={altaPending} />
-                </div>
-                <div className="inv-field">
-                  <label htmlFor="cantidad">Cantidad en stock *</label>
-                  <input id="cantidad" name="cantidad" type="number" min={0} required defaultValue={0} disabled={altaPending} />
-                </div>
-                <div className="inv-field">
-                  <label htmlFor="fecha_caducidad">Fecha de caducidad</label>
-                  <input id="fecha_caducidad" name="fecha_caducidad" type="date" disabled={altaPending} />
-                </div>
-              </div>
-
-              <div className="inv-form-actions">
-                <button type="button" className="inv-btn-ghost" onClick={() => setMostrarFormAlta(false)} disabled={altaPending}>
-                  Cancelar
-                </button>
-                <button type="submit" className="inv-btn-primary" disabled={altaPending}>
-                  {altaPending
-                    ? <><i className="fa-solid fa-circle-notch fa-spin" /> Guardando...</>
-                    : <><i className="fa-solid fa-floppy-disk" /> Guardar producto</>}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ── BUSCADOR ── */}
-          <div className="inv-search">
-            <i className="fa-solid fa-magnifying-glass" />
-            <input
-              type="text"
-              placeholder="Buscar medicamento..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-            />
+            </section>
           </div>
-
-          {/* ── TABLA ── */}
-          <div className="inv-table-wrap">
-            {productosFiltrados.length === 0 ? (
-              <div className="inv-empty">
-                <i className="fa-solid fa-box-open" />
-                <p>{productos.length === 0 ? 'Aún no hay productos en el inventario.' : 'No se encontraron productos con ese nombre.'}</p>
-              </div>
-            ) : (
-              <table className="inv-table">
-                <thead>
-                  <tr>
-                    <th>Medicamento</th>
-                    <th>Cantidad en stock</th>
-                    <th>Fecha de caducidad</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productosFiltrados.map(p => (
-                    <FilaProducto
-                      key={p.id_producto}
-                      producto={p}
-                      onChange={(actualizado) => {
-                        startTransition(() => {
-                          setProductosLocales(prev => ({
-                            ...prev,
-                            [p.id_producto]: actualizado,
-                          }))
-                        })
-                      }}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </main>
-
-        <style>{`
-          .inv-page { background: #f4f7fb; font-family: 'Poppins', sans-serif; flex: 1; }
-          .inv-main { max-width: 1100px; margin: 0 auto; padding: 32px 6% 80px; }
-          .inv-title-row { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
-          .inv-title-row h1 { font-size: 1.6rem; color: #0f172a; margin-bottom: 4px; }
-          .inv-title-row p { color: #64748b; font-size: .9rem; }
-          .inv-btn-primary { background: #001f73; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-family: 'Poppins', sans-serif; font-weight: 600; font-size: .9rem; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: .2s; white-space: nowrap; }
-          .inv-btn-primary:hover:not(:disabled) { background: #1e3a8a; transform: translateY(-1px); }
-          .inv-btn-primary:disabled { opacity: .65; cursor: not-allowed; }
-          .inv-btn-ghost { background: transparent; border: 1.5px solid #e2e8f0; color: #64748b; padding: 12px 18px; border-radius: 12px; font-family: 'Poppins', sans-serif; font-weight: 500; font-size: .9rem; cursor: pointer; transition: .2s; }
-          .inv-btn-ghost:hover:not(:disabled) { border-color: #94a3b8; color: #0f172a; }
-          .inv-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-          .inv-stat-card { background: white; border-radius: 16px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; border: 1px solid #e2e8f0; }
-          .inv-stat-card i { font-size: 1.6rem; color: #001f73; }
-          .inv-stat-card strong { display: block; font-size: 1.3rem; color: #0f172a; }
-          .inv-stat-card span { font-size: .78rem; color: #64748b; }
-          .inv-stat-warn i { color: #f59e0b; }
-          .inv-stat-danger i { color: #ef4444; }
-          .inv-form-card { background: white; border-radius: 16px; padding: 24px; border: 1px solid #e2e8f0; margin-bottom: 24px; }
-          .inv-form-card h3 { color: #0f172a; margin-bottom: 16px; font-size: 1.05rem; }
-          .inv-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 16px; }
-          .inv-field { display: flex; flex-direction: column; gap: 6px; }
-          .inv-field label { font-size: .8rem; font-weight: 600; color: #374151; }
-          .inv-field input { padding: 11px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-family: 'Poppins', sans-serif; font-size: .9rem; background: #f8fafc; outline: none; transition: border-color .2s; }
-          .inv-field input:focus { border-color: #22d3ee; background: #fff; }
-          .inv-form-actions { display: flex; justify-content: flex-end; gap: 10px; }
-          .inv-alert { padding: 12px 14px; border-radius: 10px; font-size: .85rem; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-          .inv-alert-error { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
-          .inv-search { background: white; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; max-width: 360px; }
-          .inv-search i { color: #94a3b8; }
-          .inv-search input { border: none; outline: none; font-family: 'Poppins', sans-serif; font-size: .9rem; width: 100%; background: transparent; }
-          .inv-table-wrap { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
-          .inv-table { width: 100%; border-collapse: collapse; }
-          .inv-table th { text-align: left; padding: 14px 18px; background: #f8fafc; color: #64748b; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #e2e8f0; }
-          .inv-table td { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; font-size: .9rem; color: #0f172a; vertical-align: middle; }
-          .inv-table tr:last-child td { border-bottom: none; }
-          .inv-empty { padding: 60px 20px; text-align: center; color: #94a3b8; }
-          .inv-empty i { font-size: 2.4rem; margin-bottom: 12px; display: block; }
-          @media (max-width: 700px) {
-            .inv-table thead { display: none; }
-            .inv-table, .inv-table tbody, .inv-table tr, .inv-table td { display: block; width: 100%; }
-            .inv-table tr { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; }
-            .inv-table td { padding: 4px 0; border: none; }
-          }
-        `}</style>
+        </div>
       </div>
     </DashboardShell>
   )
 }
 
-// ── FILA INDIVIDUAL ────────────────────────────────────────────────────────
 function FilaProducto({
   producto,
   onChange,
@@ -266,83 +337,118 @@ function FilaProducto({
   onChange: (actualizado: ProductoInventario | null) => void
 }) {
   const [stockState, stockFormAction, stockPending] = useActionState<InventarioState, FormData>(
-    async (prev, formData) => {
-      const result = await ajustarStockAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await ajustarStockAction(previousState, formData)
       if (result?.success) {
-        const delta = parseInt(formData.get('delta') as string)
-        onChange({ ...producto, cantidad: producto.cantidad + delta })
+        const deltaStock = Number.parseInt(formData.get('delta') as string)
+        onChange({ ...producto, cantidad: producto.cantidad + deltaStock })
       }
       return result
     },
-    null
+    null,
   )
   const [, eliminarFormAction, eliminarPending] = useActionState<InventarioState, FormData>(
-    async (prev, formData) => {
-      const result = await eliminarProductoAction(prev, formData)
+    async (previousState, formData) => {
+      const result = await eliminarProductoAction(previousState, formData)
       if (result?.success) onChange(null)
       return result
     },
-    null
+    null,
   )
   const [delta, setDelta] = useState(1)
   const estado = estadoCaducidad(producto.fecha_caducidad)
   const pasoSeguro = Math.max(1, delta || 1)
 
+  const estadoClass = {
+    vencido: 'is-danger',
+    'por-vencer': 'is-warning',
+    ok: 'is-success',
+    'sin-fecha': 'is-neutral',
+  }[estado]
+
   return (
     <tr>
-      <td><strong>{producto.nombre}</strong></td>
       <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="module-patient">
+          <span className="module-patient__avatar">
+            <i className="fa-solid fa-pills" />
+          </span>
+          <span className="module-patient__details">
+            <strong>{producto.nombre}</strong>
+            <span>Producto #{producto.id_producto}</span>
+          </span>
+        </div>
+      </td>
+      <td>
+        <div className="module-stock">
           <form action={stockFormAction}>
             <input type="hidden" name="id_producto" value={producto.id_producto} />
             <input type="hidden" name="cantidad_actual" value={producto.cantidad} />
             <input type="hidden" name="delta" value={-pasoSeguro} />
-            <button type="submit" disabled={stockPending || producto.cantidad <= 0} title="Restar stock" style={btnStockStyle}>
+            <button
+              type="submit"
+              disabled={stockPending || producto.cantidad <= 0}
+              title="Restar stock"
+              className="module-stock__button"
+            >
               <i className="fa-solid fa-minus" />
             </button>
           </form>
-          <span style={{ minWidth: 32, textAlign: 'center', fontWeight: 600 }}>{producto.cantidad}</span>
+          <span className="module-stock__value">{producto.cantidad}</span>
           <form action={stockFormAction}>
             <input type="hidden" name="id_producto" value={producto.id_producto} />
             <input type="hidden" name="cantidad_actual" value={producto.cantidad} />
             <input type="hidden" name="delta" value={pasoSeguro} />
-            <button type="submit" disabled={stockPending} title="Agregar stock" style={btnStockStyle}>
+            <button
+              type="submit"
+              disabled={stockPending}
+              title="Agregar stock"
+              className="module-stock__button"
+            >
               <i className="fa-solid fa-plus" />
             </button>
           </form>
-          <input type="number" min={1} value={delta} onChange={e => setDelta(parseInt(e.target.value) || 1)}
-            style={{ width: 50, padding: '4px 6px', borderRadius: 6, border: '1.5px solid #e2e8f0', fontSize: '.8rem' }} />
+          <input
+            type="number"
+            min={1}
+            value={delta}
+            onChange={(event) => setDelta(Number.parseInt(event.target.value) || 1)}
+            className="module-stock-input"
+            aria-label="Cantidad a ajustar"
+          />
         </div>
-        {stockState?.error && <div style={{ color: '#dc2626', fontSize: '.75rem', marginTop: 4 }}>{stockState.error}</div>}
+        {stockState?.error && (
+          <small className="module-field-error">{stockState.error}</small>
+        )}
       </td>
       <td>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
-          borderRadius: 999, fontSize: '.78rem', fontWeight: 600,
-          background: estado === 'vencido' ? '#fef2f2' : estado === 'por-vencer' ? '#fffbeb' : '#f0fdf4',
-          color: estado === 'vencido' ? '#dc2626' : estado === 'por-vencer' ? '#d97706' : '#16a34a',
-        }}>
+        <span className={`module-pill ${estadoClass}`}>
           {estado === 'vencido' && <i className="fa-solid fa-skull-crossbones" />}
           {estado === 'por-vencer' && <i className="fa-solid fa-triangle-exclamation" />}
+          {estado === 'ok' && <i className="fa-solid fa-circle-check" />}
           {formatearFecha(producto.fecha_caducidad)}
         </span>
       </td>
-      <td>
-        <form action={eliminarFormAction} onSubmit={e => { if (!confirm(`¿Eliminar "${producto.nombre}" del inventario?`)) e.preventDefault() }}>
+      <td className="module-table__actions">
+        <form
+          action={eliminarFormAction}
+          onSubmit={(event) => {
+            if (!confirm(`¿Eliminar "${producto.nombre}" del inventario?`)) {
+              event.preventDefault()
+            }
+          }}
+        >
           <input type="hidden" name="id_producto" value={producto.id_producto} />
-          <button type="submit" disabled={eliminarPending} title="Eliminar producto"
-            style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem', padding: 6 }}>
+          <button
+            type="submit"
+            disabled={eliminarPending}
+            title="Eliminar producto"
+            className="module-action is-danger"
+          >
             <i className="fa-solid fa-trash" />
           </button>
         </form>
       </td>
     </tr>
   )
-}
-
-const btnStockStyle: CSSProperties = {
-  width: 26, height: 26, borderRadius: 7,
-  border: '1px solid #e2e8f0', background: '#f8fafc',
-  color: '#001f73', cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem',
 }
