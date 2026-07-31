@@ -1,10 +1,9 @@
 'use client'
 
 import { useActionState, useState } from 'react'
+import Link from 'next/link'
 import { loginAction, registerAction } from '@/app/actions/auth'
 import type { AuthState } from '@/app/actions/auth'
-
-const ROLES = ['Administrador', 'Veterinario', 'Recepcionista'] as const
 
 export default function LoginPage() {
   const [tab, setTab] = useState<'login' | 'registro'>('login')
@@ -23,10 +22,14 @@ export default function LoginPage() {
       <div className="auth-card">
 
         {/* Logo */}
-        <div className="auth-logo">
+        <Link
+          href="/"
+          className="auth-logo"
+          aria-label="Ir a la página principal"
+        >
           <i className="fa-solid fa-heart-pulse" />
           <span>PetCare <strong>Intelligence</strong></span>
-        </div>
+        </Link>
 
         {/* Tabs */}
         <div className="auth-tabs">
@@ -111,7 +114,7 @@ export default function LoginPage() {
             {registerState?.success && (
               <div className="auth-success" role="status">
                 <i className="fa-solid fa-circle-check" />
-                Cuenta creada. Revisa tu correo para confirmar.
+                Cuenta creada. Ya puedes iniciar sesión.
               </div>
             )}
 
@@ -148,7 +151,8 @@ export default function LoginPage() {
                   id="reg-password"
                   name="password"
                   type="password"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres, letra y número"
+                  minLength={8}
                   required
                   autoComplete="new-password"
                   disabled={registerPending}
@@ -170,26 +174,14 @@ export default function LoginPage() {
             </div>
 
             <div className="auth-field">
-              <label htmlFor="reg-rol">Rol en la clínica *</label>
-              <select id="reg-rol" name="rol" required disabled={registerPending}>
-                <option value="">-- Selecciona tu rol --</option>
-                {ROLES.map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="auth-field">
-              <label htmlFor="reg-clinica">
-                ID de clínica
-                <span className="auth-hint">(Opcional — tu admin te lo proporciona)</span>
-              </label>
+              <label htmlFor="reg-nombre-clinica">Nombre de clínica *</label>
               <input
-                id="reg-clinica"
-                name="id_clinica"
-                type="number"
-                min={1}
-                placeholder="Ej. 1"
+                id="reg-nombre-clinica"
+                name="nombre_clinica"
+                type="text"
+                placeholder="Ej. Veterinaria San Ángel"
+                required
+                autoComplete="organization"
                 disabled={registerPending}
               />
             </div>
@@ -236,6 +228,8 @@ export default function LoginPage() {
           font-size: 1.4rem;
           color: #001f73;
           margin-bottom: 28px;
+          text-decoration: none;
+          width: fit-content;
         }
         .auth-logo i { color: #22d3ee; font-size: 1.6rem; }
         .auth-logo strong { color: #22d3ee; }
@@ -323,13 +317,7 @@ export default function LoginPage() {
           align-items: center;
           gap: 6px;
         }
-        .auth-hint {
-          font-weight: 400;
-          color: #9ca3af;
-          font-size: .75rem;
-        }
-        .auth-field input,
-        .auth-field select {
+        .auth-field input {
           padding: 11px 14px;
           border: 1.5px solid #e2e8f0;
           border-radius: 10px;
@@ -341,13 +329,11 @@ export default function LoginPage() {
           outline: none;
           width: 100%;
         }
-        .auth-field input:focus,
-        .auth-field select:focus {
+        .auth-field input:focus {
           border-color: #22d3ee;
           background: #fff;
         }
-        .auth-field input:disabled,
-        .auth-field select:disabled {
+        .auth-field input:disabled {
           opacity: .6;
           cursor: not-allowed;
         }

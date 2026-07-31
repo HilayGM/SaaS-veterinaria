@@ -1,22 +1,11 @@
 'use server'
 
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { reportServerError } from '@/lib/server-log'
 import { getCurrentUserProfile } from './inventario'
 
 export type { PerfilUsuario } from './inventario'
-
-async function getAuthenticatedClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} } }
-  )
-}
 
 export type CitaConMascota = {
   id_cita: number
@@ -27,65 +16,75 @@ export type CitaConMascota = {
   id_mascota: number | null
 }
 
-// Trae TODAS las citas de la clínica (no solo las de hoy)
-// usando service_role para saltar RLS en citas (que filtra por mascota→clínica)
 export async function getCitas(): Promise<CitaConMascota[]> {
-  const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return []
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  // 1. Mascotas de la clínica con su dueño
-  const { data: mascotasData, error: mError } = await adminSupabase
+  const { data: mascotas, error: mascotasError } = await supabase
     .from('mascotas')
-    .select('id_mascota, nombre, id_dueño')
-    .eq('id_clinica', perfil.id_clinica)
-  const mascotas = mascotasData as any[] | null
+    .select('*')
 
-  if (mError || !mascotas?.length) return []
+  if (mascotasError) {
+    reportServerError('appointments:pets-list', mascotasError)
+    return []
+  }
+  if (!mascotas?.length) return []
 
-  const mascotaMap: Record<number, { nombre: string; id_dueño: number | null }> = {}
-  mascotas.forEach(m => { mascotaMap[m.id_mascota] = { nombre: m.nombre, id_dueño: m.id_dueño } })
-
-  // 2. Dueños
-  const idsDuenos = [...new Set(mascotas.map(m => m.id_dueño).filter(Boolean))] as number[]
-  const duenioMap: Record<number, string> = {}
+  const mascotaMap = new Map(
+    mascotas.map((mascota) => [
+      mascota.id_mascota,
+      { nombre: mascota.nombre, id_dueno: mascota['id_dueño'] },
+    ])
+  )
+  const idsDuenos = [
+    ...new Set(
+      mascotas
+        .map((mascota) => mascota['id_dueño'])
+        .filter((id): id is number => typeof id === 'number')
+    ),
+  ]
+  const duenosPorId = new Map<number, string>()
 
   if (idsDuenos.length > 0) {
-    const { data: duenosData } = await adminSupabase
+    const { data: duenos, error: duenosError } = await supabase
       .from('clientes_duenos')
-      .select('id_dueño, nombre')
+      .select('*')
       .in('id_dueño', idsDuenos)
-    const duenos = duenosData as any[] | null
-    duenos?.forEach(d => { duenioMap[d.id_dueño] = d.nombre })
+
+    if (duenosError) {
+      reportServerError('appointments:owners-list', duenosError)
+    } else {
+      for (const dueno of duenos ?? []) {
+        duenosPorId.set(dueno['id_dueño'], dueno.nombre)
+      }
+    }
   }
 
-  // 3. Citas de esas mascotas
-  const { data: citas, error: cError } = await adminSupabase
+  const { data: citas, error: citasError } = await supabase
     .from('citas')
     .select('id_cita, id_mascota, fecha, estado')
-    .in('id_mascota', mascotas.map(m => m.id_mascota))
     .order('fecha', { ascending: false })
 
-  if (cError) { console.error('[getCitas]', cError); return [] }
+  if (citasError) {
+    reportServerError('appointments:list', citasError)
+    return []
+  }
 
-  return (citas ?? []).map(c => {
-    const m = c.id_mascota ? mascotaMap[c.id_mascota] : null
+  return (citas ?? []).map((cita) => {
+    const mascota = cita.id_mascota ? mascotaMap.get(cita.id_mascota) : null
     return {
-      id_cita: c.id_cita,
-      fecha: c.fecha,
-      estado: c.estado,
-      id_mascota: c.id_mascota,
-      mascota_nombre: m?.nombre ?? '—',
-      propietario_nombre: m?.id_dueño ? (duenioMap[m.id_dueño] ?? '—') : '—',
+      id_cita: cita.id_cita,
+      fecha: cita.fecha,
+      estado: cita.estado,
+      id_mascota: cita.id_mascota,
+      mascota_nombre: mascota?.nombre ?? '-',
+      propietario_nombre: mascota?.id_dueno
+        ? (duenosPorId.get(mascota.id_dueno) ?? '-')
+        : '-',
     }
   })
 }
 
-// Alias para compatibilidad con el page.tsx existente
 export const getCitasHoy = getCitas
 
 export type CitaState = { error?: string; success?: boolean } | null
@@ -94,36 +93,40 @@ export async function agendarCitaAction(
   _prev: CitaState,
   formData: FormData
 ): Promise<CitaState> {
-  const id_mascota = parseInt(formData.get('id_mascota') as string)
-  const fecha = (formData.get('fecha') as string)?.trim()
+  const id_mascota = Number.parseInt(String(formData.get('id_mascota') ?? ''), 10)
+  const fecha = String(formData.get('fecha') ?? '').trim()
 
-  if (isNaN(id_mascota)) return { error: 'Debes seleccionar una mascota.' }
-  if (!fecha) return { error: 'La fecha y hora son obligatorias.' }
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) {
+    return { error: 'Debes seleccionar una mascota.' }
+  }
+  if (!fecha || Number.isNaN(Date.parse(fecha))) {
+    return { error: 'La fecha y hora no son válidas.' }
+  }
 
   const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return { error: 'No se detectó la clínica del usuario.' }
+  const supabase = await createAuthenticatedClient()
+  if (!perfil?.id_clinica || !supabase) return { error: 'Sesión no válida.' }
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  // Validar que la mascota pertenece a la clínica
-  const { data: mascota } = await adminSupabase
+  const { data: mascota, error: mascotaError } = await supabase
     .from('mascotas')
     .select('id_mascota')
     .eq('id_mascota', id_mascota)
-    .eq('id_clinica', perfil.id_clinica)
     .maybeSingle()
 
+  if (mascotaError) {
+    reportServerError('appointments:validate-pet', mascotaError)
+    return { error: 'No se pudo validar la mascota seleccionada.' }
+  }
   if (!mascota) return { error: 'La mascota no pertenece a esta clínica.' }
 
-  const { error } = await adminSupabase
+  const { data, error } = await supabase
     .from('citas')
     .insert({ id_mascota, fecha, estado: 'Pendiente' })
+    .select('id_cita')
+    .maybeSingle()
 
-  if (error) {
-    console.error('[agendarCita]', error)
+  if (error || !data) {
+    reportServerError('appointments:create', error)
     return { error: 'No se pudo agendar la cita. Intenta de nuevo.' }
   }
 
@@ -137,34 +140,34 @@ export async function cambiarEstadoCitaAction(
   id_cita: number,
   nuevoEstado: 'Completada' | 'Cancelada'
 ): Promise<CambiarEstadoCitaResponse> {
+  if (!Number.isInteger(id_cita) || id_cita <= 0) return { error: 'Cita inválida.' }
+  if (nuevoEstado !== 'Completada' && nuevoEstado !== 'Cancelada') {
+    return { error: 'Estado inválido.' }
+  }
+
   const perfil = await getCurrentUserProfile()
-  if (!perfil) return { error: 'No autenticado.' }
+  if (!perfil?.id_clinica) return { error: 'No autenticado.' }
   if (perfil.rol !== 'Veterinario' && perfil.rol !== 'Administrador') {
     return { error: 'Solo Veterinarios y Administradores pueden cambiar el estado.' }
   }
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return { error: 'No autenticado.' }
 
-  const { data: cita } = await adminSupabase
-    .from('citas')
-    .select('estado')
-    .eq('id_cita', id_cita)
-    .maybeSingle()
-
-  if (!cita) return { error: 'Cita no encontrada.' }
-  if (cita.estado !== 'Pendiente') return { error: 'Solo se pueden modificar citas Pendientes.' }
-
-  const { error } = await adminSupabase
+  const { data, error } = await supabase
     .from('citas')
     .update({ estado: nuevoEstado })
     .eq('id_cita', id_cita)
+    .eq('estado', 'Pendiente')
+    .select('id_cita')
+    .maybeSingle()
 
   if (error) {
-    console.error('[cambiarEstado]', error)
-    return { error: 'Error al actualizar la cita.' }
+    reportServerError('appointments:update-status', error)
+    return { error: 'No se pudo actualizar la cita.' }
+  }
+  if (!data) {
+    return { error: 'La cita no existe, no pertenece a tu clínica o ya no está pendiente.' }
   }
 
   revalidatePath('/citas')

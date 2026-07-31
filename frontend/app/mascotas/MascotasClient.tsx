@@ -127,8 +127,6 @@ export default function MascotasClient({ perfil, mascotasIniciales }: Props) {
                     </div>
                   )}
 
-                  <input type="hidden" name="id_clinica" value={perfil.id_clinica ?? ''} />
-
                   <div className="module-inline-note">
                     <i className="fa-solid fa-circle-info" />
                     <span>

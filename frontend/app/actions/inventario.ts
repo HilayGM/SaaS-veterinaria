@@ -1,54 +1,38 @@
 'use server'
 
 import { cache } from 'react'
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import {
+  createAuthenticatedClient,
+  createAuthenticatedClientFromToken,
+  getServerSessionTokens,
+} from '@/lib/supabase/server'
+import { reportServerError } from '@/lib/server-log'
 
-// ── Tipos ──────────────────────────────────────────────────────────────────
 export type InventarioState = {
   error?: string
   success?: boolean
 } | null
 
-// Helper: cliente autenticado con el JWT del usuario
-async function getAuthenticatedClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
+export type PerfilUsuario = {
+  id_usuario: string
+  nombre: string
+  correo: string
+  rol: 'Administrador' | 'Veterinario' | 'Recepcionista'
+  id_clinica: number | null
+  nombre_clinica: string | null
+}
 
-  const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    }
-  )
-  return supabase
+function isUserRole(role: string): role is PerfilUsuario['rol'] {
+  return role === 'Administrador' || role === 'Veterinario' || role === 'Recepcionista'
 }
 
 const getCurrentUserProfileByToken = cache(async (accessToken: string) => {
-  const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    }
-  )
+  const supabase = createAuthenticatedClientFromToken(accessToken)
+  const { data: userData, error: userError } = await supabase.auth.getUser()
 
-  const { data: userData, error: userError } = await supabase.auth.getUser(accessToken)
-
-  if (userError) {
-    console.error('[getCurrentUserProfile] auth error:', userError)
-    return null
-  }
-
-  if (!userData.user) {
-    console.error('[getCurrentUserProfile] No se encontró el usuario autenticado.')
+  if (userError || !userData.user) {
+    reportServerError('profile:auth', userError)
     return null
   }
 
@@ -58,9 +42,19 @@ const getCurrentUserProfileByToken = cache(async (accessToken: string) => {
     .eq('id_usuario', userData.user.id)
     .maybeSingle()
 
-  if (perfilError || !perfil) return null
+  if (perfilError || !perfil) {
+    reportServerError('profile:lookup', perfilError)
+    return null
+  }
+  if (!isUserRole(perfil.rol)) {
+    reportServerError('profile:invalid-role', `Rol no reconocido: ${perfil.rol}`)
+    return null
+  }
 
-  const clinicaRel = perfil.clinicas as unknown as { nombre: string } | { nombre: string }[] | null
+  const clinicaRel = perfil.clinicas as unknown as
+    | { nombre: string }
+    | { nombre: string }[]
+    | null
   const nombre_clinica = Array.isArray(clinicaRel)
     ? clinicaRel[0]?.nombre ?? null
     : clinicaRel?.nombre ?? null
@@ -72,28 +66,16 @@ const getCurrentUserProfileByToken = cache(async (accessToken: string) => {
     rol: perfil.rol,
     id_clinica: perfil.id_clinica,
     nombre_clinica,
-  }
+  } satisfies PerfilUsuario
 })
 
-// ── PERFIL DEL USUARIO ACTUAL (sesión + fila en `usuarios`) ────────────────
-export type PerfilUsuario = {
-  id_usuario: string
-  nombre: string
-  correo: string
-  rol: 'Administrador' | 'Veterinario' | 'Recepcionista'
-  id_clinica: number | null
-  nombre_clinica: string | null
-}
-
 export async function getCurrentUserProfile(): Promise<PerfilUsuario | null> {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
+  const { accessToken } = await getServerSessionTokens()
   if (!accessToken) return null
 
   return getCurrentUserProfileByToken(accessToken)
 }
 
-// ── LISTAR INVENTARIO DE LA CLÍNICA DEL USUARIO ─────────────────────────────
 export type ProductoInventario = {
   id_producto: number
   nombre: string
@@ -103,52 +85,50 @@ export type ProductoInventario = {
 }
 
 export async function getInventario(): Promise<ProductoInventario[]> {
-  const supabase = await getAuthenticatedClient()
-  // No filtramos id_clinica explícitamente: RLS ya garantiza el aislamiento
-  // multitenant, así que esta consulta solo regresa los productos de la
-  // clínica del usuario autenticado (o vacío si no tiene clínica/sesión).
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
+
   const { data, error } = await supabase
     .from('inventario')
     .select('id_producto, nombre, cantidad, fecha_caducidad, id_clinica')
     .order('fecha_caducidad', { ascending: true, nullsFirst: false })
 
   if (error) {
-    console.error('[getInventario]', error)
+    reportServerError('inventory:list', error)
     return []
   }
+
   return data ?? []
 }
 
-// ── AGREGAR PRODUCTO ──────────────────────────────────────────────────────
 export async function agregarProductoAction(
   _prev: InventarioState,
   formData: FormData
 ): Promise<InventarioState> {
-  const nombre = (formData.get('nombre') as string)?.trim()
-  const cantidad_str = formData.get('cantidad') as string
-  const fecha_caducidad = (formData.get('fecha_caducidad') as string) || null
-  const id_clinica_str = formData.get('id_clinica') as string
+  const nombre = String(formData.get('nombre') ?? '').trim()
+  const cantidad = Number.parseInt(String(formData.get('cantidad') ?? ''), 10)
+  const fechaCaducidadRaw = String(formData.get('fecha_caducidad') ?? '').trim()
+  const fecha_caducidad = fechaCaducidadRaw || null
 
-  if (!nombre) return { error: 'El nombre del producto es obligatorio.' }
-
-  const cantidad = parseInt(cantidad_str)
-  if (isNaN(cantidad) || cantidad < 0) {
-    return { error: 'La cantidad debe ser un número positivo.' }
+  if (!nombre || nombre.length > 255) {
+    return { error: 'El nombre es obligatorio y no puede exceder 255 caracteres.' }
+  }
+  if (!Number.isInteger(cantidad) || cantidad < 0) {
+    return { error: 'La cantidad debe ser un número entero no negativo.' }
   }
 
-  const id_clinica = id_clinica_str ? parseInt(id_clinica_str) : null
-  if (!id_clinica) return { error: 'No se detectó la clínica del usuario.' }
+  const perfil = await getCurrentUserProfile()
+  const supabase = await createAuthenticatedClient()
+  if (!perfil?.id_clinica || !supabase) return { error: 'Sesión no válida.' }
 
-  const supabase = await getAuthenticatedClient()
-  const { error } = await supabase.from('inventario').insert({
-    nombre,
-    cantidad,
-    fecha_caducidad,
-    id_clinica,
-  })
+  const { data, error } = await supabase
+    .from('inventario')
+    .insert({ nombre, cantidad, fecha_caducidad })
+    .select('id_producto')
+    .maybeSingle()
 
-  if (error) {
-    console.error('[agregar producto]', error)
+  if (error || !data) {
+    reportServerError('inventory:create', error)
     return { error: 'No se pudo agregar el producto. Verifica tus permisos.' }
   }
 
@@ -156,32 +136,36 @@ export async function agregarProductoAction(
   return { success: true }
 }
 
-// ── AJUSTAR STOCK (sumar o restar) ────────────────────────────────────────
 export async function ajustarStockAction(
   _prev: InventarioState,
   formData: FormData
 ): Promise<InventarioState> {
-  const id_producto = parseInt(formData.get('id_producto') as string)
-  const delta = parseInt(formData.get('delta') as string) // positivo = agregar, negativo = restar
-  const cantidad_actual = parseInt(formData.get('cantidad_actual') as string)
+  const id_producto = Number.parseInt(String(formData.get('id_producto') ?? ''), 10)
+  const delta = Number.parseInt(String(formData.get('delta') ?? ''), 10)
 
-  if (isNaN(id_producto) || isNaN(delta)) {
-    return { error: 'Datos inválidos.' }
+  if (!Number.isInteger(id_producto) || id_producto <= 0 || !Number.isInteger(delta) || delta === 0) {
+    return { error: 'Datos de stock inválidos.' }
+  }
+  if (Math.abs(delta) > 1_000_000) {
+    return { error: 'El ajuste solicitado es demasiado grande.' }
   }
 
-  const nueva_cantidad = cantidad_actual + delta
-  if (nueva_cantidad < 0) {
-    return { error: 'Stock insuficiente. La cantidad no puede ser negativa.' }
-  }
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return { error: 'Sesión no válida.' }
 
-  const supabase = await getAuthenticatedClient()
-  const { error } = await supabase
-    .from('inventario')
-    .update({ cantidad: nueva_cantidad })
-    .eq('id_producto', id_producto)
+  const { error } = await supabase.rpc('ajustar_stock', {
+    p_id_producto: id_producto,
+    p_delta: delta,
+  })
 
   if (error) {
-    console.error('[ajustar stock]', error)
+    reportServerError('inventory:adjust-stock', error)
+    if (error.message.includes('INSUFFICIENT_STOCK')) {
+      return { error: 'Stock insuficiente. La cantidad no puede ser negativa.' }
+    }
+    if (error.message.includes('PRODUCT_NOT_AVAILABLE')) {
+      return { error: 'El producto no existe o no pertenece a tu clínica.' }
+    }
     return { error: 'No se pudo actualizar el stock.' }
   }
 
@@ -189,25 +173,30 @@ export async function ajustarStockAction(
   return { success: true }
 }
 
-// ── ELIMINAR PRODUCTO ──────────────────────────────────────────────────────
 export async function eliminarProductoAction(
   _prev: InventarioState,
   formData: FormData
 ): Promise<InventarioState> {
-  const id_producto = parseInt(formData.get('id_producto') as string)
+  const id_producto = Number.parseInt(String(formData.get('id_producto') ?? ''), 10)
+  if (!Number.isInteger(id_producto) || id_producto <= 0) {
+    return { error: 'Producto inválido.' }
+  }
 
-  if (isNaN(id_producto)) return { error: 'Producto inválido.' }
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return { error: 'Sesión no válida.' }
 
-  const supabase = await getAuthenticatedClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('inventario')
     .delete()
     .eq('id_producto', id_producto)
+    .select('id_producto')
+    .maybeSingle()
 
   if (error) {
-    console.error('[eliminar producto]', error)
+    reportServerError('inventory:delete', error)
     return { error: 'No se pudo eliminar el producto.' }
   }
+  if (!data) return { error: 'El producto no existe o no pertenece a tu clínica.' }
 
   revalidatePath('/inventario')
   return { success: true }

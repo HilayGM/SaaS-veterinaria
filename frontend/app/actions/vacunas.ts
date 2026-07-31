@@ -1,9 +1,8 @@
 'use server'
 
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { reportServerError } from '@/lib/server-log'
 import { getCurrentUserProfile } from './inventario'
 
 export type { PerfilUsuario } from './inventario'
@@ -27,75 +26,42 @@ export type VacunaConMascota = {
   } | null
 }
 
-async function getAuthenticatedClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    }
-  )
-}
-
 function getFechaActual() {
   return new Date().toISOString().slice(0, 10)
 }
 
 export async function getVacunas(): Promise<VacunaConMascota[]> {
-  const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return []
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  const { data: mascotasRaw, error: mascotasError } = await adminSupabase
+  const { data: mascotas, error: mascotasError } = await supabase
     .from('mascotas')
     .select('id_mascota, nombre, especie, raza')
-    .eq('id_clinica', perfil.id_clinica)
 
   if (mascotasError) {
-    console.error('[getVacunas - mascotas]', mascotasError)
+    reportServerError('vaccines:pets-list', mascotasError)
     return []
   }
-  if (!mascotasRaw?.length) return []
+  if (!mascotas?.length) return []
 
   const mascotasPorId: Record<number, VacunaConMascota['mascota']> = {}
-  const idsMascotas = mascotasRaw.map(m => {
-    mascotasPorId[m.id_mascota] = {
-      id_mascota: m.id_mascota,
-      nombre: m.nombre,
-      especie: m.especie,
-      raza: m.raza,
-    }
-    return m.id_mascota
-  })
+  for (const mascota of mascotas) {
+    mascotasPorId[mascota.id_mascota] = mascota
+  }
 
-  const { data: vacunasRaw, error: vacunasError } = await adminSupabase
+  const { data: vacunas, error: vacunasError } = await supabase
     .from('vacunas')
     .select('id_vacuna, id_mascota, nombre, fecha_aplicacion, proxima_aplicacion')
-    .in('id_mascota', idsMascotas)
     .order('proxima_aplicacion', { ascending: true, nullsFirst: false })
 
   if (vacunasError) {
-    console.error('[getVacunas]', vacunasError)
+    reportServerError('vaccines:list', vacunasError)
     return []
   }
-  if (!vacunasRaw?.length) return []
 
-  return vacunasRaw.map(v => ({
-    id_vacuna: v.id_vacuna,
-    id_mascota: v.id_mascota,
-    nombre: v.nombre,
-    fecha_aplicacion: v.fecha_aplicacion,
-    proxima_aplicacion: v.proxima_aplicacion,
-    mascota: v.id_mascota ? (mascotasPorId[v.id_mascota] ?? null) : null,
+  return (vacunas ?? []).map((vacuna) => ({
+    ...vacuna,
+    mascota: vacuna.id_mascota ? (mascotasPorId[vacuna.id_mascota] ?? null) : null,
   }))
 }
 
@@ -103,50 +69,48 @@ export async function registrarVacunaAction(
   _prev: VacunaState,
   formData: FormData
 ): Promise<VacunaState> {
-  const nombre = (formData.get('nombre') as string)?.trim()
-  const id_mascota = parseInt(formData.get('id_mascota') as string)
-  const fecha_aplicacion = (formData.get('fecha_aplicacion') as string) || getFechaActual()
-  const proxima_aplicacion = (formData.get('proxima_aplicacion') as string) || null
+  const nombre = String(formData.get('nombre') ?? '').trim()
+  const id_mascota = Number.parseInt(String(formData.get('id_mascota') ?? ''), 10)
+  const fecha_aplicacion = String(formData.get('fecha_aplicacion') ?? '').trim() || getFechaActual()
+  const proxima_aplicacion = String(formData.get('proxima_aplicacion') ?? '').trim() || null
 
-  if (!nombre) return { error: 'El nombre de la vacuna es obligatorio.' }
-  if (isNaN(id_mascota)) return { error: 'La mascota es obligatoria.' }
+  if (!nombre || nombre.length > 255) return { error: 'El nombre de la vacuna no es válido.' }
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) {
+    return { error: 'La mascota es obligatoria.' }
+  }
   if (proxima_aplicacion && proxima_aplicacion <= fecha_aplicacion) {
     return { error: 'La próxima aplicación debe ser mayor que la fecha de aplicación.' }
   }
 
   const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return { error: 'No se detectó la clínica del usuario.' }
-
-  const supabase = await getAuthenticatedClient()
+  const supabase = await createAuthenticatedClient()
+  if (!perfil?.id_clinica || !supabase) return { error: 'Sesión no válida.' }
 
   const { data: mascota, error: mascotaError } = await supabase
     .from('mascotas')
     .select('id_mascota')
     .eq('id_mascota', id_mascota)
-    .eq('id_clinica', perfil.id_clinica)
     .maybeSingle()
 
   if (mascotaError) {
-    console.error('[registrar vacuna - mascota]', mascotaError)
+    reportServerError('vaccines:validate-pet', mascotaError)
     return { error: 'No se pudo validar la mascota seleccionada.' }
   }
   if (!mascota) return { error: 'La mascota seleccionada no pertenece a esta clínica.' }
 
-  const { error: vacunaError } = await supabase
+  const { data, error } = await supabase
     .from('vacunas')
-    .insert({
-      id_mascota,
-      nombre,
-      fecha_aplicacion,
-      proxima_aplicacion,
-    })
+    .insert({ id_mascota, nombre, fecha_aplicacion, proxima_aplicacion })
+    .select('id_vacuna')
+    .maybeSingle()
 
-  if (vacunaError) {
-    console.error('[registrar vacuna]', vacunaError)
+  if (error || !data) {
+    reportServerError('vaccines:create', error)
     return { error: 'No se pudo registrar la vacuna. Verifica tus permisos.' }
   }
 
   revalidatePath('/vacunas')
+  revalidatePath(`/mascotas/detalle/${id_mascota}`)
   return { success: true }
 }
 

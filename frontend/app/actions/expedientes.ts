@@ -1,9 +1,8 @@
 'use server'
 
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { reportServerError } from '@/lib/server-log'
 import { getCurrentUserProfile } from './inventario'
 
 export type { PerfilUsuario } from './inventario'
@@ -26,75 +25,57 @@ export type ExpedienteConMascota = {
   } | null
 }
 
-async function getAuthenticatedClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} } }
-  )
-}
-
 export async function getExpedientes(): Promise<ExpedienteConMascota[]> {
-  const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return []
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  const { data: mascotas, error: mascotasError } = await adminSupabase
+  const { data: mascotas, error: mascotasError } = await supabase
     .from('mascotas')
     .select('id_mascota, nombre, especie')
-    .eq('id_clinica', perfil.id_clinica)
 
-  if (mascotasError || !mascotas?.length) return []
+  if (mascotasError) {
+    reportServerError('records:pets-list', mascotasError)
+    return []
+  }
+  if (!mascotas?.length) return []
 
   const mascotasPorId: Record<number, ExpedienteConMascota['mascota']> = {}
-  const idsMascotas = mascotas.map(m => {
-    mascotasPorId[m.id_mascota] = { id_mascota: m.id_mascota, nombre: m.nombre, especie: m.especie }
-    return m.id_mascota
-  })
+  for (const mascota of mascotas) {
+    mascotasPorId[mascota.id_mascota] = mascota
+  }
 
-  const { data: expedientes, error: expedientesError } = await adminSupabase
+  const { data: expedientes, error } = await supabase
     .from('expedientes')
     .select('id_expediente, id_mascota, diagnostico, tratamiento, fecha_consulta')
-    .in('id_mascota', idsMascotas)
     .order('fecha_consulta', { ascending: false })
 
-  if (expedientesError) {
-    console.error('[getExpedientes]', expedientesError)
+  if (error) {
+    reportServerError('records:list', error)
     return []
   }
 
-  return (expedientes ?? []).map(e => ({
-    id_expediente: e.id_expediente,
-    id_mascota: e.id_mascota,
-    diagnostico: e.diagnostico,
-    tratamiento: e.tratamiento,
-    fecha_consulta: e.fecha_consulta,
-    mascota: e.id_mascota ? (mascotasPorId[e.id_mascota] ?? null) : null,
+  return (expedientes ?? []).map((expediente) => ({
+    ...expediente,
+    mascota: expediente.id_mascota
+      ? (mascotasPorId[expediente.id_mascota] ?? null)
+      : null,
   }))
 }
 
 export async function getMascotasDeClinica() {
-  const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return []
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  const { data, error } = await adminSupabase
+  const { data, error } = await supabase
     .from('mascotas')
     .select('id_mascota, nombre, especie')
-    .eq('id_clinica', perfil.id_clinica)
     .order('nombre', { ascending: true })
 
-  if (error) { console.error('[getMascotasDeClinica]', error); return [] }
+  if (error) {
+    reportServerError('records:pets-options', error)
+    return []
+  }
+
   return data ?? []
 }
 
@@ -102,38 +83,49 @@ export async function registrarExpedienteAction(
   _prev: ExpedienteState,
   formData: FormData
 ): Promise<ExpedienteState> {
-  const id_mascota = parseInt(formData.get('id_mascota') as string)
-  const diagnostico = (formData.get('diagnostico') as string)?.trim()
-  const tratamiento = (formData.get('tratamiento') as string)?.trim() || null
+  const id_mascota = Number.parseInt(String(formData.get('id_mascota') ?? ''), 10)
+  const diagnostico = String(formData.get('diagnostico') ?? '').trim()
+  const tratamiento = String(formData.get('tratamiento') ?? '').trim() || null
 
-  if (isNaN(id_mascota)) return { error: 'La mascota es obligatoria.' }
-  if (!diagnostico) return { error: 'El diagnóstico es obligatorio.' }
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) {
+    return { error: 'La mascota es obligatoria.' }
+  }
+  if (!diagnostico || diagnostico.length > 5_000) {
+    return { error: 'El diagnóstico es obligatorio y no puede exceder 5000 caracteres.' }
+  }
+  if (tratamiento && tratamiento.length > 5_000) {
+    return { error: 'El tratamiento no puede exceder 5000 caracteres.' }
+  }
 
   const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return { error: 'No se detectó la clínica del usuario.' }
-
-  const supabase = await getAuthenticatedClient()
+  const supabase = await createAuthenticatedClient()
+  if (!perfil?.id_clinica || !supabase) return { error: 'Sesión no válida.' }
 
   const { data: mascota, error: mascotaError } = await supabase
     .from('mascotas')
     .select('id_mascota')
     .eq('id_mascota', id_mascota)
-    .eq('id_clinica', perfil.id_clinica)
     .maybeSingle()
 
-  if (mascotaError) return { error: 'No se pudo validar la mascota.' }
+  if (mascotaError) {
+    reportServerError('records:validate-pet', mascotaError)
+    return { error: 'No se pudo validar la mascota.' }
+  }
   if (!mascota) return { error: 'La mascota no pertenece a esta clínica.' }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('expedientes')
     .insert({ id_mascota, diagnostico, tratamiento })
+    .select('id_expediente')
+    .maybeSingle()
 
-  if (error) {
-    console.error('[registrar expediente]', error)
+  if (error || !data) {
+    reportServerError('records:create', error)
     return { error: 'No se pudo registrar el expediente.' }
   }
 
   revalidatePath('/expedientes')
+  revalidatePath(`/mascotas/detalle/${id_mascota}`)
   return { success: true }
 }
 
@@ -141,24 +133,31 @@ export async function eliminarExpedienteAction(
   _prev: ExpedienteState,
   formData: FormData
 ): Promise<ExpedienteState> {
-  const id_expediente = parseInt(formData.get('id_expediente') as string)
-  if (isNaN(id_expediente)) return { error: 'Expediente inválido.' }
+  const id_expediente = Number.parseInt(String(formData.get('id_expediente') ?? ''), 10)
+  if (!Number.isInteger(id_expediente) || id_expediente <= 0) {
+    return { error: 'Expediente inválido.' }
+  }
 
   const perfil = await getCurrentUserProfile()
-  if (perfil?.rol !== 'Administrador') {
+  if (perfil?.rol !== 'Administrador' || !perfil.id_clinica) {
     return { error: 'Solo los Administradores pueden eliminar expedientes.' }
   }
 
-  const supabase = await getAuthenticatedClient()
-  const { error } = await supabase
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return { error: 'Sesión no válida.' }
+
+  const { data, error } = await supabase
     .from('expedientes')
     .delete()
     .eq('id_expediente', id_expediente)
+    .select('id_expediente')
+    .maybeSingle()
 
   if (error) {
-    console.error('[eliminar expediente]', error)
+    reportServerError('records:delete', error)
     return { error: 'No se pudo eliminar el expediente.' }
   }
+  if (!data) return { error: 'El expediente no existe o no pertenece a tu clínica.' }
 
   revalidatePath('/expedientes')
   return { success: true }
