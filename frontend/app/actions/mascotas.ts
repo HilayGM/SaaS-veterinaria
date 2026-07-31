@@ -1,9 +1,8 @@
 'use server'
 
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { reportServerError } from '@/lib/server-log'
 import { getCurrentUserProfile } from './inventario'
 
 export type { PerfilUsuario } from './inventario'
@@ -31,68 +30,62 @@ export type MascotaConDueno = {
   } | null
 }
 
-async function getAuthenticatedClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    }
-  )
-}
-
 export async function getMascotas(): Promise<MascotaConDueno[]> {
-  const perfil = await getCurrentUserProfile()
-  if (!perfil?.id_clinica) return []
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  // select('*') evita poner id_dueño (ñ) en el string de select que PostgREST parsea
-  const { data: mascotasRaw, error } = await adminSupabase
+  const { data: mascotas, error: mascotasError } = await supabase
     .from('mascotas')
     .select('*')
-    .eq('id_clinica', perfil.id_clinica)
     .order('id_mascota', { ascending: false })
 
-  if (error) {
-    console.error('[getMascotas]', error)
+  if (mascotasError) {
+    reportServerError('pets:list', mascotasError)
     return []
   }
-  if (!mascotasRaw?.length) return []
+  if (!mascotas?.length) return []
 
-  // Query separada para clientes_duenos — PostgREST no puede seguir el FK
-  // con el caracter ñ en el nombre de columna, así que hacemos el join en código
-  const { data: duenosRaw } = await adminSupabase
-    .from('clientes_duenos')
-    .select('*')
-
+  const idsDuenos = [
+    ...new Set(
+      mascotas
+        .map((mascota) => mascota['id_dueño'])
+        .filter((id): id is number => typeof id === 'number')
+    ),
+  ]
   const duenosPorId: Record<number, MascotaConDueno['dueno']> = {}
-  for (const d of duenosRaw ?? []) {
-    const id = d['id_dueño'] as number
-    duenosPorId[id] = { nombre: d.nombre, telefono: d.telefono, correo: d.correo }
+
+  if (idsDuenos.length > 0) {
+    const { data: duenos, error: duenosError } = await supabase
+      .from('clientes_duenos')
+      .select('*')
+      .in('id_dueño', idsDuenos)
+
+    if (duenosError) {
+      reportServerError('pets:owners-list', duenosError)
+    } else {
+      for (const dueno of duenos ?? []) {
+        duenosPorId[dueno['id_dueño']] = {
+          nombre: dueno.nombre,
+          telefono: dueno.telefono,
+          correo: dueno.correo,
+        }
+      }
+    }
   }
 
-  return mascotasRaw.map(m => {
-    const idDueno = m['id_dueño'] as number | null
+  return mascotas.map((mascota) => {
+    const idDueno = mascota['id_dueño']
     return {
-      id_mascota: m.id_mascota,
-      nombre: m.nombre,
-      especie: m.especie,
-      raza: m.raza,
-      fecha_nacimiento: m.fecha_nacimiento,
-      id_clinica: m.id_clinica,
-      medicamento: m.medicamento,
-      dosis: m.dosis,
-      frecuencia: m.frecuencia,
-      duracion: m.duracion,
+      id_mascota: mascota.id_mascota,
+      nombre: mascota.nombre,
+      especie: mascota.especie,
+      raza: mascota.raza,
+      fecha_nacimiento: mascota.fecha_nacimiento,
+      id_clinica: mascota.id_clinica,
+      medicamento: mascota.medicamento,
+      dosis: mascota.dosis,
+      frecuencia: mascota.frecuencia,
+      duracion: mascota.duracion,
       dueno: idDueno ? (duenosPorId[idDueno] ?? null) : null,
     }
   })
@@ -102,65 +95,41 @@ export async function registrarMascotaAction(
   _prev: MascotaState,
   formData: FormData
 ): Promise<MascotaState> {
-  const nombre = (formData.get('nombre') as string)?.trim()
-  const especie = (formData.get('especie') as string)?.trim()
-  const raza = (formData.get('raza') as string)?.trim() || null
-  const fecha_nacimiento = (formData.get('fecha_nacimiento') as string) || null
-  const nombre_dueno = (formData.get('nombre_dueno') as string)?.trim()
-  const id_clinica_str = formData.get('id_clinica') as string
-  
-  const medicamento = (formData.get('medicamento') as string)?.trim() || null
-  const dosis = (formData.get('dosis') as string)?.trim() || null
-  const frecuencia = (formData.get('frecuencia') as string)?.trim() || null
-  const duracion = (formData.get('duracion') as string)?.trim() || null
+  const nombre = String(formData.get('nombre') ?? '').trim()
+  const especie = String(formData.get('especie') ?? '').trim()
+  const raza = String(formData.get('raza') ?? '').trim() || null
+  const fecha_nacimiento = String(formData.get('fecha_nacimiento') ?? '').trim() || null
+  const nombre_dueno = String(formData.get('nombre_dueno') ?? '').trim()
+  const medicamento = String(formData.get('medicamento') ?? '').trim() || null
+  const dosis = String(formData.get('dosis') ?? '').trim() || null
+  const frecuencia = String(formData.get('frecuencia') ?? '').trim() || null
+  const duracion = String(formData.get('duracion') ?? '').trim() || null
 
-  if (!nombre) return { error: 'El nombre de la mascota es obligatorio.' }
-  if (!especie) return { error: 'La especie es obligatoria.' }
-  if (!nombre_dueno) return { error: 'El nombre del propietario es obligatorio.' }
-
-  const id_clinica = id_clinica_str ? parseInt(id_clinica_str) : null
-  if (!id_clinica) return { error: 'No se detectó la clínica del usuario.' }
-
-  const supabase = await getAuthenticatedClient()
-
-  // clientes_duenos no tiene RLS activo, pero la anon key no tiene GRANT de INSERT
-  // por defecto en Supabase. Usamos el admin client (service_role) para este insert.
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  // 1. Crear el dueño
-  const { data: dueno, error: duenoError } = await adminSupabase
-    .from('clientes_duenos')
-    .insert({ nombre: nombre_dueno })
-    .select('*')
-    .single()
-
-  if (duenoError || !dueno) {
-    console.error('[registrar mascota - dueño]', duenoError)
-    return { error: 'No se pudo registrar al propietario.' }
+  if (!nombre || nombre.length > 255) return { error: 'El nombre de la mascota no es válido.' }
+  if (!especie || especie.length > 100) return { error: 'La especie no es válida.' }
+  if (!nombre_dueno || nombre_dueno.length > 255) {
+    return { error: 'El nombre del propietario no es válido.' }
   }
 
-  // 2. Crear la mascota enlazada al dueño y a la clínica (RLS valida id_clinica)
-  const { error: mascotaError } = await supabase
-    .from('mascotas')
-    .insert({
-      nombre,
-      especie,
-      raza,
-      fecha_nacimiento,
-      id_dueño: dueno['id_dueño'],
-      id_clinica,
-      medicamento,
-      dosis,
-      frecuencia,
-      duracion,
-    })
+  const perfil = await getCurrentUserProfile()
+  const supabase = await createAuthenticatedClient()
+  if (!perfil?.id_clinica || !supabase) return { error: 'Sesión no válida.' }
 
-  if (mascotaError) {
-    console.error('[registrar mascota]', mascotaError)
-    return { error: 'No se pudo registrar la mascota. Verifica tus permisos.' }
+  const { error } = await supabase.rpc('registrar_mascota_con_dueno', {
+    p_nombre: nombre,
+    p_especie: especie,
+    p_raza: raza ?? undefined,
+    p_fecha_nacimiento: fecha_nacimiento ?? undefined,
+    p_nombre_dueno: nombre_dueno,
+    p_medicamento: medicamento ?? undefined,
+    p_dosis: dosis ?? undefined,
+    p_frecuencia: frecuencia ?? undefined,
+    p_duracion: duracion ?? undefined,
+  })
+
+  if (error) {
+    reportServerError('pets:create', error)
+    return { error: 'No se pudo registrar la mascota. Verifica los datos e intenta de nuevo.' }
   }
 
   revalidatePath('/mascotas')
@@ -171,19 +140,24 @@ export async function eliminarMascotaAction(
   _prev: MascotaState,
   formData: FormData
 ): Promise<MascotaState> {
-  const id_mascota = parseInt(formData.get('id_mascota') as string)
-  if (isNaN(id_mascota)) return { error: 'Mascota inválida.' }
+  const id_mascota = Number.parseInt(String(formData.get('id_mascota') ?? ''), 10)
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) return { error: 'Mascota inválida.' }
 
-  const supabase = await getAuthenticatedClient()
-  const { error } = await supabase
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return { error: 'Sesión no válida.' }
+
+  const { data, error } = await supabase
     .from('mascotas')
     .delete()
     .eq('id_mascota', id_mascota)
+    .select('id_mascota')
+    .maybeSingle()
 
   if (error) {
-    console.error('[eliminar mascota]', error)
+    reportServerError('pets:delete', error)
     return { error: 'No se pudo eliminar la mascota.' }
   }
+  if (!data) return { error: 'La mascota no existe o no pertenece a tu clínica.' }
 
   revalidatePath('/mascotas')
   return { success: true }
@@ -193,28 +167,33 @@ export async function actualizarRecetaAction(
   _prev: MascotaState,
   formData: FormData
 ): Promise<MascotaState> {
-  const id_mascota = parseInt(formData.get('id_mascota') as string)
-  if (isNaN(id_mascota)) return { error: 'Mascota inválida.' }
+  const id_mascota = Number.parseInt(String(formData.get('id_mascota') ?? ''), 10)
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) return { error: 'Mascota inválida.' }
 
-  const medicamento = (formData.get('medicamento') as string)?.trim() || null
-  const dosis = (formData.get('dosis') as string)?.trim() || null
-  const frecuencia = (formData.get('frecuencia') as string)?.trim() || null
-  const duracion = (formData.get('duracion') as string)?.trim() || null
+  const medicamento = String(formData.get('medicamento') ?? '').trim() || null
+  const dosis = String(formData.get('dosis') ?? '').trim() || null
+  const frecuencia = String(formData.get('frecuencia') ?? '').trim() || null
+  const duracion = String(formData.get('duracion') ?? '').trim() || null
 
-  const supabase = await getAuthenticatedClient()
-  const { error } = await supabase
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return { error: 'Sesión no válida.' }
+
+  const { data, error } = await supabase
     .from('mascotas')
     .update({ medicamento, dosis, frecuencia, duracion })
     .eq('id_mascota', id_mascota)
+    .select('id_mascota')
+    .maybeSingle()
 
   if (error) {
-    console.error('[actualizar receta]', error)
+    reportServerError('pets:update-prescription', error)
     return { error: 'No se pudo actualizar la receta médica.' }
   }
+  if (!data) return { error: 'La mascota no existe o no pertenece a tu clínica.' }
 
   revalidatePath('/mascotas')
+  revalidatePath(`/mascotas/detalle/${id_mascota}`)
   return { success: true }
 }
 
 export { getCurrentUserProfile }
-

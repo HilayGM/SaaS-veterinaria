@@ -26,52 +26,54 @@ export default function LandingPage() {
 
       {/* HERO */}
       <section className="hero">
-        <div className="hero-content">
-          <h1>
-            La plataforma inteligente
-            para veterinarias
-            <span> más eficientes</span>
-          </h1>
+        <div className="hero-inner">
+          <div className="hero-content">
+            <h1>
+              La plataforma inteligente
+              para veterinarias
+              <span> más eficientes</span>
+            </h1>
 
-          <p>
-            El sistema definitivo para que las veterinarias no pierdan dinero en
-            medicamentos caducados.
-          </p>
+            <p>
+              El sistema definitivo para que las veterinarias no pierdan dinero en
+              medicamentos caducados.
+            </p>
 
-          <div className="hero-buttons">
-            <Link href="/login" className="btn btn-primary">
-              <i className="fa-regular fa-calendar"></i>
-              Solicitar Demo
-            </Link>
+            <div className="hero-buttons">
+              <Link href="/login" className="btn btn-primary">
+                <i className="fa-regular fa-calendar"></i>
+                Solicitar Demo
+              </Link>
 
-            <a href="#solucion" className="btn btn-secondary">
-              <i className="fa-solid fa-play"></i>
-              Conocer Más
-            </a>
+              <a href="#solucion" className="btn btn-secondary">
+                <i className="fa-solid fa-play"></i>
+                Conocer Más
+              </a>
+            </div>
           </div>
-        </div>
 
-        <div className="hero-image">
-          <div className="hero-image-glow" aria-hidden="true"></div>
+          <div className="hero-image">
+            <div className="hero-image-glow" aria-hidden="true"></div>
 
-          <Image
-            className="hero-dog"
-            src="/images/veterinary-dog-cutout.png"
-            alt="Perro labrador con estetoscopio"
-            width={837}
-            height={1102}
-            sizes="(max-width: 768px) 78vw, (max-width: 1100px) 46vw, 38vw"
-            preload
-          />
+            <Image
+              className="hero-dog"
+              src="/images/veterinary-dog-cutout.png"
+              alt="Perro labrador con estetoscopio"
+              width={837}
+              height={1102}
+              sizes="(max-width: 768px) 78vw, (max-width: 1100px) 42vw, 560px"
+              preload
+            />
 
-          <div className="hero-pet-card">
-            <span className="hero-pet-card-icon">
-              <i className="fa-solid fa-shield-dog"></i>
-            </span>
-            <span>
-              <strong>Cuidado inteligente</strong>
-              <small>Todo bajo control</small>
-            </span>
+            <div className="hero-pet-card">
+              <span className="hero-pet-card-icon">
+                <i className="fa-solid fa-shield-dog"></i>
+              </span>
+              <span>
+                <strong>Cuidado inteligente</strong>
+                <small>Todo bajo control</small>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -214,7 +216,15 @@ export default function LandingPage() {
             Empezar Ahora
           </Link>
 
-          <div className="cta-dog"></div>
+          <div className="cta-dog" aria-hidden="true">
+            <Image
+              src="/images/veterinary-dog-cutout.png"
+              alt=""
+              width={837}
+              height={1102}
+              sizes="190px"
+            />
+          </div>
         </div>
       </section>
 

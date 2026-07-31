@@ -174,8 +174,6 @@ export default function InventarioClient({ perfil, productosIniciales }: Props) 
                     </div>
                   )}
 
-                  <input type="hidden" name="id_clinica" value={perfil.id_clinica ?? ''} />
-
                   <div className="module-inline-note">
                     <i className="fa-solid fa-circle-info" aria-hidden="true" />
                     <span>
@@ -383,7 +381,6 @@ function FilaProducto({
         <div className="module-stock">
           <form action={stockFormAction}>
             <input type="hidden" name="id_producto" value={producto.id_producto} />
-            <input type="hidden" name="cantidad_actual" value={producto.cantidad} />
             <input type="hidden" name="delta" value={-pasoSeguro} />
             <button
               type="submit"
@@ -397,7 +394,6 @@ function FilaProducto({
           <span className="module-stock__value">{producto.cantidad}</span>
           <form action={stockFormAction}>
             <input type="hidden" name="id_producto" value={producto.id_producto} />
-            <input type="hidden" name="cantidad_actual" value={producto.cantidad} />
             <input type="hidden" name="delta" value={pasoSeguro} />
             <button
               type="submit"

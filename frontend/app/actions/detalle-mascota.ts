@@ -1,9 +1,7 @@
 'use server'
 
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/types'
-import { cookies } from 'next/headers'
-import { getCurrentUserProfile } from './inventario'
+import { createAuthenticatedClient } from '@/lib/supabase/server'
+import { reportServerError } from '@/lib/server-log'
 
 export type MascotaDetalle = {
   id_mascota: number
@@ -36,50 +34,35 @@ export type Vacuna = {
   proxima_aplicacion: string | null
 }
 
-async function getAuthenticatedClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
-    }
-  )
-}
-
 export async function getMascotaDetalle(id_mascota: number): Promise<MascotaDetalle | null> {
-  const supabase = await getAuthenticatedClient()
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) return null
 
-  // Verify access implicitly via RLS
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return null
+
   const { data: mascota, error } = await supabase
     .from('mascotas')
     .select('*')
     .eq('id_mascota', id_mascota)
-    .single()
+    .maybeSingle()
 
-  if (error || !mascota) {
-    console.error('[getMascotaDetalle]', error)
+  if (error) {
+    reportServerError('pet-detail:lookup', error)
     return null
   }
+  if (!mascota) return null
 
-  // Get owner info securely using service_role since clientes_duenos doesn't have RLS active for anon yet
-  const adminSupabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  let dueno = null
+  let dueno: MascotaDetalle['dueno'] = null
   if (mascota['id_dueño']) {
-    const { data: duenoData } = await adminSupabase
+    const { data: duenoData, error: duenoError } = await supabase
       .from('clientes_duenos')
       .select('nombre, telefono, correo')
       .eq('id_dueño', mascota['id_dueño'])
-      .single()
-    if (duenoData) {
+      .maybeSingle()
+
+    if (duenoError) {
+      reportServerError('pet-detail:owner', duenoError)
+    } else {
       dueno = duenoData
     }
   }
@@ -99,7 +82,10 @@ export async function getMascotaDetalle(id_mascota: number): Promise<MascotaDeta
 }
 
 export async function getExpedientes(id_mascota: number): Promise<Expediente[]> {
-  const supabase = await getAuthenticatedClient()
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) return []
+
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
   const { data, error } = await supabase
     .from('expedientes')
@@ -108,15 +94,18 @@ export async function getExpedientes(id_mascota: number): Promise<Expediente[]> 
     .order('fecha_consulta', { ascending: false })
 
   if (error) {
-    console.error('[getExpedientes]', error)
+    reportServerError('pet-detail:records', error)
     return []
   }
 
-  return data as Expediente[]
+  return data ?? []
 }
 
 export async function getVacunas(id_mascota: number): Promise<Vacuna[]> {
-  const supabase = await getAuthenticatedClient()
+  if (!Number.isInteger(id_mascota) || id_mascota <= 0) return []
+
+  const supabase = await createAuthenticatedClient()
+  if (!supabase) return []
 
   const { data, error } = await supabase
     .from('vacunas')
@@ -125,9 +114,9 @@ export async function getVacunas(id_mascota: number): Promise<Vacuna[]> {
     .order('fecha_aplicacion', { ascending: false })
 
   if (error) {
-    console.error('[getVacunas]', error)
+    reportServerError('pet-detail:vaccines', error)
     return []
   }
 
-  return data as Vacuna[]
+  return data ?? []
 }
